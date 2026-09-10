@@ -21,6 +21,7 @@ class AudioCoverKeyer : Keyer<AudioCover> {
             append("|uri=").append(data.uri.toString())
             append("|path=").append(data.path)
             append("|folderArt=").append(data.isUseFolderArt)
+            append("|ignoreMediaStore=").append(data.isIgnoreMediaStore)
             append("|lastModified=").append(data.lastModified)
         }
     }

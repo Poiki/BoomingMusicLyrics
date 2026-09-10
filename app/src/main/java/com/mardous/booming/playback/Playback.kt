@@ -17,12 +17,20 @@ object Playback {
     const val SET_UNSHUFFLED_ORDER = "$PACKAGE_NAME.command.set.unshuffled_order"
     /** Action to set the new stop position */
     const val SET_STOP_POSITION = "$PACKAGE_NAME.command.set.stop_position"
+    /** Action exposed only to car controllers to show the upcoming queue in session artwork */
+    const val TOGGLE_CAR_QUEUE_ARTWORK = "$PACKAGE_NAME.command.car_queue_artwork.toggle"
+    /** Action exposed only to car controllers to toggle lyrics in session artwork */
+    const val TOGGLE_CAR_LYRICS_ARTWORK = "$PACKAGE_NAME.command.car_lyrics_artwork.toggle"
 
     // Result extras reported back by TOGGLE_SHUFFLE and CYCLE_REPEAT
     /** Extra indicating the new shuffle mode */
     const val EXTRA_SHUFFLE_MODE = "$PACKAGE_NAME.extra.shuffle_mode"
     /** Extra indicating the new repeat mode */
     const val EXTRA_REPEAT_MODE = "$PACKAGE_NAME.extra.repeat_mode"
+    /** Extra indicating whether the car queue artwork is enabled */
+    const val EXTRA_CAR_QUEUE_ARTWORK_ENABLED = "$PACKAGE_NAME.extra.car_queue_artwork.enabled"
+    /** Extra indicating whether the car lyrics artwork overlay is enabled */
+    const val EXTRA_CAR_LYRICS_ARTWORK_ENABLED = "$PACKAGE_NAME.extra.car_lyrics_artwork.enabled"
 
     // Custom events
     const val EVENT_MEDIA_CONTENT_CHANGED = "$PACKAGE_NAME.event.media_content_changed"

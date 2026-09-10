@@ -533,6 +533,17 @@
     <!-- Lyrics viewer -->
     <string name="action_show_lyrics">Show lyrics</string>
     <string name="action_hide_lyrics">Hide lyrics</string>
+    <string name="action_show_queue_artwork">Show up next</string>
+    <string name="action_hide_queue_artwork">Hide up next</string>
+    <string name="car_queue_end">End of queue</string>
+    <string name="car_queue_repeat_one">Repeating this song</string>
+    <string name="action_show_lyrics_artwork">Lyrics cover on</string>
+    <string name="action_hide_lyrics_artwork">Lyrics cover off</string>
+    <string name="car_lyrics_loading">Loading lyrics…</string>
+    <string name="car_lyrics_not_synchronized">Lyrics are not synchronized</string>
+    <string name="car_lyrics_instrumental">Instrumental track</string>
+    <string name="car_lyrics_not_found">Lyrics not found</string>
+    <string name="car_lyrics_error">Unable to load lyrics</string>
     <string name="plain_lyrics">Plain</string>
     <string name="synced_lyrics">Synced</string>
     <string name="embedded_lyrics">Embedded</string>

@@ -39,7 +39,9 @@ class LrcLibApi(private val client: HttpClient) : LyricsApi {
                 ((maxValue - minValue) < 2)
             }
             if (matchingLyrics == null) {
-                matchingLyrics = lyrics.first { !it.plainLyrics.isNullOrEmpty() }
+                matchingLyrics = lyrics.firstOrNull { !it.plainLyrics.isNullOrEmpty() }
+                    ?: lyrics.firstOrNull { !it.syncedLyrics.isNullOrEmpty() || it.instrumental }
+                    ?: return null
             }
             return RawLyrics.Remote(
                 plain = RawLyrics.Remote.Content(name, matchingLyrics.plainLyrics),

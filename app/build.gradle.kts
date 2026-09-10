@@ -97,6 +97,7 @@ android {
         create("github") {
             dimension = "version"
 
+            buildConfigField("boolean", "CAR_LYRICS_OVERLAY_ENABLED", "true")
             resValue("bool", "network_features_enabled_by_default", "true")
             resValue("bool", "enable_builtin_updater", "true")
             resValue("bool", "enable_lyrically_provider", "true")
@@ -104,6 +105,7 @@ android {
         create("fdroid") {
             dimension = "version"
 
+            buildConfigField("boolean", "CAR_LYRICS_OVERLAY_ENABLED", "false")
             resValue("bool", "network_features_enabled_by_default", "false")
             resValue("bool", "enable_builtin_updater", "false")
             resValue("bool", "enable_lyrically_provider", "true")
@@ -111,6 +113,7 @@ android {
         create("playstore") {
             dimension = "version"
 
+            buildConfigField("boolean", "CAR_LYRICS_OVERLAY_ENABLED", "false")
             resValue("bool", "network_features_enabled_by_default", "true")
             resValue("bool", "enable_builtin_updater", "false")
             resValue("bool", "enable_lyrically_provider", "false")
@@ -328,6 +331,9 @@ dependencies {
     implementation(libs.versioncompare)
     implementation(libs.commons.text)
     implementation(libs.juniversalchardet)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 fun getProperties(fileName: String): Properties? {

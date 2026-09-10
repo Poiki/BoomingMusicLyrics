@@ -13,6 +13,7 @@ import com.mardous.booming.data.local.lyrics.ttml.TtmlLyricsParser
 import com.mardous.booming.data.local.room.LyricsDao
 import com.mardous.booming.data.local.room.LyricsEntity
 import com.mardous.booming.data.model.Song
+import com.mardous.booming.data.model.UnindexedSong
 import com.mardous.booming.data.model.lyrics.LyricsFile
 import com.mardous.booming.data.model.lyrics.LyricsSource
 import com.mardous.booming.data.model.lyrics.RawLyrics
@@ -21,6 +22,7 @@ import com.mardous.booming.data.remote.lyrics.LyricsDownloadService
 import com.mardous.booming.extensions.hasR
 import com.mardous.booming.extensions.media.isArtistNameUnknown
 import com.mardous.booming.util.Preferences.requireString
+import kotlinx.coroutines.CancellationException
 import org.mozilla.universalchardet.UniversalDetector
 import java.io.BufferedInputStream
 import java.io.File
@@ -44,6 +46,7 @@ interface LyricsRepository {
 
     suspend fun writableUris(song: Song): List<Uri>
     suspend fun deleteAllLyrics()
+    fun invalidateCache(songId: Long? = null) = Unit
 }
 
 class RealLyricsRepository(
@@ -53,9 +56,7 @@ class RealLyricsRepository(
     private val lyricsDao: LyricsDao
 ) : LyricsRepository {
 
-    private val memoryCache = LruCache<Long, Map<LyricsSource, RawLyrics>>(20)
-
-    private val charsetDetector = UniversalDetector()
+    private val memoryCache = LruCache<LyricsCacheKey, Map<LyricsSource, RawLyrics>>(20)
 
     private val lrcLyricsParser = LrcLyricsParser()
     private val ttmlLyricsParser = TtmlLyricsParser()
@@ -90,14 +91,16 @@ class RealLyricsRepository(
 
                 else -> null
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Couldn't parse lyrics for song ${song.data}", e)
+            throw e
         }
-        return null
     }
 
     override suspend fun fileLyrics(song: Song): RawLyrics.File? {
-        getCachedLyrics<RawLyrics.File>(LyricsSource.File, song.id)?.let { return it }
+        getCachedLyrics<RawLyrics.File>(LyricsSource.File, song)?.let { return it }
         try {
             val preferredFormatValue =
                 preferences.requireString("preferred_lyrics_file_format", "ttml")
@@ -105,45 +108,59 @@ class RealLyricsRepository(
                 LyricsFile.Format.entries.firstOrNull { it.value == preferredFormatValue }
 
             val rawLyricsList = mutableListOf<RawLyrics.File>()
+            var firstReadFailure: Exception? = null
             for (file in findLyricsFiles(song)) {
                 val actualFile = File(file.path)
-                val lyrics = runCatching {
+                val lyrics = try {
                     actualFile.inputStream().buffered().use { stream ->
                         val charset = detectEncoding(stream)
                         stream.reader(charset).use { it.readText() }
                     }
-                }.getOrNull() ?: continue
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (firstReadFailure == null) {
+                        firstReadFailure = e
+                    }
+                    continue
+                }
 
                 if (lyrics.isNotEmpty()) {
                     val rawLyrics = RawLyrics.File(file, lyrics)
                     if (file.format == preferredFormat) {
-                        return cacheLyrics(song.id, rawLyrics)
+                        return cacheLyrics(song, rawLyrics)
                     }
                     rawLyricsList.add(rawLyrics)
                 }
             }
 
             return rawLyricsList.firstOrNull()?.let {
-                cacheLyrics(song.id, it)
-            }
+                cacheLyrics(song, it)
+            } ?: firstReadFailure?.let { throw it }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Couldn't find/read lyrics files for song ${song.data}", e)
+            throw e
         }
         return null
     }
 
     override suspend fun embeddedLyrics(song: Song): RawLyrics.Embedded? {
         if (song.id != Song.emptySong.id) {
-            getCachedLyrics<RawLyrics.Embedded>(LyricsSource.Embedded, song.id)?.let { return it }
+            getCachedLyrics<RawLyrics.Embedded>(LyricsSource.Embedded, song)?.let { return it }
             try {
                 val metadataReader = MetadataReader(song.uri)
                 var lyrics = metadataReader.value(MetadataReader.LYRICS)
                 if (lyrics.isNullOrEmpty()) {
                     lyrics = metadataReader.value("UNSYNCEDLYRICS")
                 }
-                return cacheLyrics(song.id, RawLyrics.Embedded(lyrics))
+                return cacheLyrics(song, RawLyrics.Embedded(lyrics))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Couldn't read embedded lyrics for song ${song.data}", e)
+                throw e
             }
         }
         return null
@@ -151,7 +168,13 @@ class RealLyricsRepository(
 
     override suspend fun storedLyrics(song: Song, allowDownload: Boolean): RawLyrics.Stored? {
         if (song.id != Song.emptySong.id) try {
-            getCachedLyrics<RawLyrics.Stored>(LyricsSource.Downloaded, song.id)?.let { return it }
+            getCachedLyrics<RawLyrics.Stored>(LyricsSource.Downloaded, song)?.let { return it }
+            if (song is UnindexedSong) {
+                if (!allowDownload) return null
+                return lyricsDownloadService.remoteLyrics(song)
+                    .prepareToStore()
+                    ?.let { cacheLyrics(song, it) }
+            }
             val storedLyrics = lyricsDao.getLyrics(song.id)
             if (storedLyrics == null && allowDownload) {
                 val storableLyrics = lyricsDownloadService.remoteLyrics(song)
@@ -170,17 +193,20 @@ class RealLyricsRepository(
                             )
                         )
                     }
-                    return cacheLyrics(song.id, storableLyrics)
+                    return cacheLyrics(song, storableLyrics)
                 }
             } else if (storedLyrics != null) {
-                return cacheLyrics(song.id, RawLyrics.Stored(
+                return cacheLyrics(song, RawLyrics.Stored(
                     lyrics = storedLyrics.lyrics,
                     provider = storedLyrics.provider,
                     instrumental = storedLyrics.instrumental
                 ))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Couldn't fetch/download lyrics for song ${song.data}", e)
+            throw e
         }
         return null
     }
@@ -195,6 +221,8 @@ class RealLyricsRepository(
         }
         return try {
             lyricsDownloadService.remoteLyrics(song, searchTitle, searchArtist, fromUser = true)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }
@@ -233,11 +261,12 @@ class RealLyricsRepository(
                             metadataWriter.propertyMap(hashMapOf(MetadataReader.LYRICS to it.newContent))
                             metadataWriter.write(this.context, EditTarget.song(song)).isSuccess
                         }.getOrDefault(false).also { success ->
-                            if (success) removeCachedLyrics(LyricsSource.Embedded, song.id)
+                            if (success) removeCachedLyrics(LyricsSource.Embedded, song)
                         }
                     }
 
                     is RawLyrics.Stored -> {
+                        if (song is UnindexedSong) return@all false
                         runCatching {
                             lyricsDao.insertLyrics(
                                 LyricsEntity(
@@ -249,7 +278,7 @@ class RealLyricsRepository(
                             )
                             true
                         }.getOrDefault(false).also { success ->
-                            if (success) removeCachedLyrics(LyricsSource.Downloaded, song.id)
+                            if (success) removeCachedLyrics(LyricsSource.Downloaded, song)
                         }
                     }
 
@@ -274,18 +303,28 @@ class RealLyricsRepository(
         memoryCache.evictAll()
     }
 
+    override fun invalidateCache(songId: Long?) {
+        if (songId == null) {
+            memoryCache.evictAll()
+        } else {
+            memoryCache.snapshot().keys
+                .filter { it.songId == songId }
+                .forEach(memoryCache::remove)
+        }
+    }
+
     private inline fun <reified T : RawLyrics> getCachedLyrics(
         source: LyricsSource,
-        songId: Long
+        song: Song
     ): T? {
-        val cachedLyrics = memoryCache[songId]
+        val cachedLyrics = memoryCache[LyricsCacheKey(song.id, song.data)]
         if (cachedLyrics != null && cachedLyrics.containsKey(source)) {
             return cachedLyrics[source] as? T
         }
         return null
     }
 
-    private fun <T : RawLyrics> cacheLyrics(songId: Long, lyrics: T): T {
+    private fun <T : RawLyrics> cacheLyrics(song: Song, lyrics: T): T {
         val source = when (lyrics) {
             is RawLyrics.Embedded -> LyricsSource.Embedded
             is RawLyrics.Stored -> LyricsSource.Downloaded
@@ -293,18 +332,20 @@ class RealLyricsRepository(
             else -> null
         }
         if (source != null) {
-            val cachedLyrics = memoryCache[songId]?.toMutableMap() ?: mutableMapOf()
+            val key = LyricsCacheKey(song.id, song.data)
+            val cachedLyrics = memoryCache[key]?.toMutableMap() ?: mutableMapOf()
             cachedLyrics[source] = lyrics
-            memoryCache.put(songId, cachedLyrics)
+            memoryCache.put(key, cachedLyrics)
         }
         return lyrics
     }
 
-    private fun removeCachedLyrics(source: LyricsSource, songId: Long) {
-        val cachedLyrics = memoryCache[songId]?.toMutableMap()
+    private fun removeCachedLyrics(source: LyricsSource, song: Song) {
+        val key = LyricsCacheKey(song.id, song.data)
+        val cachedLyrics = memoryCache[key]?.toMutableMap()
         if (cachedLyrics != null) {
             cachedLyrics.remove(source)
-            memoryCache.put(songId, cachedLyrics)
+            memoryCache.put(key, cachedLyrics)
         }
     }
 
@@ -335,26 +376,32 @@ class RealLyricsRepository(
     private fun detectEncoding(bis: BufferedInputStream): Charset {
         return if (preferences.getBoolean(FORCE_UTF_8_ENCODING, true)) {
             Charsets.UTF_8
-        } else try {
-            charsetDetector.reset()
-            bis.mark(BUFFER_SIZE)
+        } else {
+            val charsetDetector = UniversalDetector()
+            try {
+                charsetDetector.reset()
+                bis.mark(ENCODING_DETECTION_LIMIT)
 
-            val buf = ByteArray(BUFFER_SIZE)
-            var nread: Int
-            while ((bis.read(buf).also { nread = it }) > 0 && !charsetDetector.isDone) {
-                charsetDetector.handleData(buf, 0, nread)
+                val buf = ByteArray(BUFFER_SIZE)
+                var remaining = ENCODING_DETECTION_LIMIT
+                while (remaining > 0 && !charsetDetector.isDone) {
+                    val nread = bis.read(buf, 0, minOf(buf.size, remaining))
+                    if (nread <= 0) break
+                    charsetDetector.handleData(buf, 0, nread)
+                    remaining -= nread
+                }
+
+                charsetDetector.dataEnd()
+                charsetDetector.detectedCharset?.let {
+                    Charset.forName(it)
+                } ?: Charsets.UTF_8
+            } catch (e: IOException) {
+                Log.e(TAG, "Couldn't detect lyrics file encoding", e)
+                Charsets.UTF_8
+            } finally {
+                bis.reset()
+                charsetDetector.reset()
             }
-
-            charsetDetector.dataEnd()
-            charsetDetector.detectedCharset?.let {
-                Charset.forName(it)
-            } ?: Charsets.UTF_8
-        } catch (e: IOException) {
-            Log.e(TAG, "Couldn't detect lyrics file encoding", e)
-            Charsets.UTF_8
-        } finally {
-            bis.reset()
-            charsetDetector.reset()
         }
     }
 
@@ -362,7 +409,13 @@ class RealLyricsRepository(
         private const val TAG = "LyricsRepository"
 
         private const val BUFFER_SIZE = 4096
+        private const val ENCODING_DETECTION_LIMIT = 64 * 1024
         private const val FORCE_UTF_8_ENCODING = "force_utf8_encoding_for_lyrics"
         private const val IGNORE_BLANK_LINES = "ignore_blank_lines_in_lyrics"
     }
+
+    private data class LyricsCacheKey(
+        val songId: Long,
+        val data: String
+    )
 }

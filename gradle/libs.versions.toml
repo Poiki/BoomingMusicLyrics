@@ -5,6 +5,7 @@ kotlin = "2.3.21"
 
 kotlinDatetime = "0.8.0"
 kotlinCoroutines = "1.11.0"
+junit = "4.13.2"
 material = "1.14.0"
 core = "1.19.0"
 coreSplashscreen = "1.2.0"
@@ -72,6 +73,8 @@ accompanist-permissions = { module = "com.google.accompanist:accompanist-permiss
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinDatetime" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinCoroutines" }
 kotlinx-coroutines-guava = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-guava", version.ref = "kotlinCoroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinCoroutines" }
+junit = { module = "junit:junit", version.ref = "junit" }
 
 lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }
 lifecycle-livedata = { module = "androidx.lifecycle:lifecycle-livedata-ktx", version.ref = "lifecycle" }

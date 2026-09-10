@@ -59,6 +59,7 @@ import com.mardous.booming.data.repository.SpecialRepository
 import com.mardous.booming.playback.QueueStateHolder
 import com.mardous.booming.playback.SleepTimer
 import com.mardous.booming.playback.equalizer.EqualizerManager
+import com.mardous.booming.playback.lyrics.CurrentLyricsCoordinator
 import com.mardous.booming.playback.processor.BalanceAudioProcessor
 import com.mardous.booming.playback.processor.ReplayGainAudioProcessor
 import com.mardous.booming.ui.screen.equalizer.EqualizerViewModel
@@ -246,6 +247,14 @@ private val dataModule = module {
     } bind LyricsRepository::class
 
     single {
+        CurrentLyricsCoordinator(
+            preferences = get(),
+            repository = get(),
+            queueStateHolder = get()
+        )
+    }
+
+    single {
         NetworkRepositoryImpl(
             context = androidContext(),
             preferences = get(),
@@ -328,7 +337,12 @@ private val viewModule = module {
     }
 
     viewModel {
-        LyricsViewModel(application = androidApplication(), preferences = get(), repository = get())
+        LyricsViewModel(
+            application = androidApplication(),
+            preferences = get(),
+            repository = get(),
+            currentLyricsCoordinator = get()
+        )
     }
 
     viewModel {

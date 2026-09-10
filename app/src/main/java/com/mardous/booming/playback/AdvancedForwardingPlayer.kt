@@ -23,6 +23,7 @@ class AdvancedForwardingPlayer(
             newPosition: Player.PositionInfo,
             reason: Int
         ) {
+            if (!sequentialTimelineEnabled) return
             val lastUpcomingIndex = getLastUpcomingItemIndex()
             if (newPosition.mediaItemIndex > lastUpcomingIndex) {
                 onClearUpcomingRange()
@@ -221,12 +222,10 @@ class AdvancedForwardingPlayer(
     }
 
     private fun getLastUpcomingItemIndex(): Int {
-        if (mediaItemCount == 0) return C.INDEX_UNSET
-
-        return (0 until mediaItemCount)
-            .map { index -> getMediaItemAt(index) }
-            .indexOfLast { item -> item.isUpcoming() }
-            .takeIf { value -> value > -1 } ?: C.INDEX_UNSET
+        for (index in mediaItemCount - 1 downTo 0) {
+            if (getMediaItemAt(index).isUpcoming()) return index
+        }
+        return C.INDEX_UNSET
     }
 
     private fun isIndexInUpcomingRange(

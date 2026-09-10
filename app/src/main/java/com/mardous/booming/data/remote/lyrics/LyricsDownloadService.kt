@@ -27,6 +27,7 @@ import com.mardous.booming.data.remote.lyrics.api.lyrically.LyricallyApi
 import com.mardous.booming.extensions.media.albumArtistName
 import com.mardous.booming.extensions.media.extractMainArtistName
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CancellationException
 import java.io.IOException
 
 class LyricsDownloadService(client: HttpClient) {
@@ -46,28 +47,52 @@ class LyricsDownloadService(client: HttpClient) {
     ): RawLyrics.Remote {
         var result = RawLyrics.Remote()
 
-        if (song == Song.emptySong || !NetworkFeature.isOnline(ignoreWifiSetting = fromUser))
+        if (song == Song.emptySong)
             return result
+
+        val hasEnabledProvider = lyricsApi.any { it.networkFeature.isEnabled }
+        if (!hasEnabledProvider) return result
+        if (!NetworkFeature.isOnline(ignoreWifiSetting = fromUser)) {
+            throw IOException("Network unavailable for lyrics download")
+        }
 
         try {
             val cleanedTitle = cleanTitle(title)
             val cleanedArtist = artist.extractMainArtistName()
+            var attemptedApi = false
+            var completedApi = false
+            var lastFailure: Throwable? = null
             for (api in lyricsApi) {
                 if (!api.networkFeature.isEnabled)
                     continue
 
-                val apiResult = runCatching { api.downloadLyrics(song, cleanedTitle, cleanedArtist) }
-                if (apiResult.isFailure) {
-                    Log.e(TAG, "Error during lyrics request", apiResult.exceptionOrNull())
+                attemptedApi = true
+                val response = try {
+                    api.downloadLyrics(song, cleanedTitle, cleanedArtist).also {
+                        completedApi = true
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    lastFailure = e
+                    Log.e(TAG, "Error during lyrics request", e)
+                    continue
                 }
 
-                val response = apiResult.getOrNull() ?: continue
+                response ?: continue
 
                 result = result.accept(response)
                 if (result.hasBoth) break
             }
+            if (attemptedApi && !completedApi && lastFailure != null) {
+                throw IOException("All enabled lyrics providers failed", lastFailure)
+            }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Lyrics download failed with error:", e)
+            if (e is IOException) throw e
+            throw IOException("Lyrics download failed", e)
         }
 
         return result

@@ -34,8 +34,12 @@ const val RESOLVED_FROM_FILE = "resolved_from_file"
 @OptIn(UnstableApi::class)
 internal fun MediaSession.isRemoteController(controller: MediaSession.ControllerInfo): Boolean {
     return isMediaNotificationController(controller) ||
-            isAutoCompanionController(controller) ||
-            isAutomotiveController(controller)
+            isCarController(controller)
+}
+
+@OptIn(UnstableApi::class)
+internal fun MediaSession.isCarController(controller: MediaSession.ControllerInfo): Boolean {
+    return isAutoCompanionController(controller) || isAutomotiveController(controller)
 }
 
 /** Whether a controller may browse the library and issue commands that change stored data */
@@ -180,7 +184,11 @@ fun buildPlayableMediaItem(song: Song, id: String = song.id.toString()): MediaIt
             MediaMetadata.Builder()
                 .setIsPlayable(true)
                 .setIsBrowsable(false)
-                .setArtworkUri(getImageUri(CoverProvider.SONG_COVER_PATH, song.id))
+                .setArtworkUri(
+                    getImageUri(CoverProvider.SONG_COVER_PATH, song.id)?.buildUpon()
+                        ?.appendQueryParameter("revision", song.rawDateModified.toString())
+                        ?.build()
+                )
                 .setTitle(song.title)
                 .setSubtitle(song.songInfo())
                 .setAlbumTitle(song.albumName)

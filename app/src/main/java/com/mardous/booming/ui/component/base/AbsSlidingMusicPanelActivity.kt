@@ -82,7 +82,6 @@ import com.mardous.booming.extensions.whichFragment
 import com.mardous.booming.ui.IBackConsumer
 import com.mardous.booming.ui.screen.library.LibraryViewModel
 import com.mardous.booming.ui.screen.library.search.SearchFragment
-import com.mardous.booming.ui.screen.lyrics.LyricsViewModel
 import com.mardous.booming.ui.screen.onboard.OnboardActivity
 import com.mardous.booming.ui.screen.other.MiniPlayerFragment
 import com.mardous.booming.ui.screen.player.PlayerViewModel
@@ -123,7 +122,6 @@ abstract class AbsSlidingMusicPanelActivity : AbsBaseActivity(),
 
     protected val libraryViewModel: LibraryViewModel by viewModel()
     protected val playerViewModel: PlayerViewModel by viewModel()
-    protected val lyricsViewModel: LyricsViewModel by viewModel()
 
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<FrameLayout>
     private lateinit var nowPlayingScreen: NowPlayingScreen
@@ -208,12 +206,6 @@ abstract class AbsSlidingMusicPanelActivity : AbsBaseActivity(),
                 if (!isHiddenByDestination) {
                     hideBottomSheet(queue.isEmpty())
                 }
-            }
-        }
-
-        launchAndRepeatWithViewLifecycle {
-            playerViewModel.currentSongFlow.collect { currentSong ->
-                lyricsViewModel.updateSong(currentSong)
             }
         }
 

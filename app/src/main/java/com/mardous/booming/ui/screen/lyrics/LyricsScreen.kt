@@ -64,6 +64,7 @@ import com.mardous.booming.core.model.LibraryMargin
 import com.mardous.booming.core.model.lyrics.LyricsViewSettings
 import com.mardous.booming.core.model.lyrics.LyricsViewSettings.BackgroundEffect
 import com.mardous.booming.core.model.lyrics.LyricsViewState
+import com.mardous.booming.core.model.lyrics.LyricsUiState
 import com.mardous.booming.core.model.player.PlayerColorScheme
 import com.mardous.booming.data.model.Song
 import com.mardous.booming.data.model.lyrics.SyncedLyrics
@@ -83,14 +84,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import org.koin.compose.viewmodel.koinActivityViewModel
-
-sealed class LyricsUiState(open val id: Long) {
-    data class Loading(override val id: Long) : LyricsUiState(id)
-    data class Empty(override val id: Long) : LyricsUiState(id)
-    data class Instrumental(override val id: Long) : LyricsUiState(id)
-    data class Plain(override val id: Long, val lyrics: String) : LyricsUiState(id)
-    data class Synced(override val id: Long, val syncedLyrics: SyncedLyrics) : LyricsUiState(id)
-}
 
 @Composable
 private fun rememberLyricsViewState(lyrics: SyncedLyrics): LyricsViewState {
@@ -345,9 +338,20 @@ private fun LyricsSurface(
     }
     Box(modifier) {
         when (uiState) {
-            is LyricsUiState.Empty -> {
+            is LyricsUiState.NotFound -> {
                 Text(
                     text = stringResource(R.string.no_lyrics_found),
+                    color = contentColor,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .align(Alignment.Center)
+                )
+            }
+
+            is LyricsUiState.Error -> {
+                Text(
+                    text = stringResource(R.string.car_lyrics_error),
                     color = contentColor,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier

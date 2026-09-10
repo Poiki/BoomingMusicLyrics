@@ -2,22 +2,28 @@
 
 <img src="metadata/en-US/images/icon.png" width="160" height="160" alt="Booming Music icon">
 
-# 🎵 Booming Music
+# 🎵 Booming Music Lyrics
 
-### Modern design. Pure sound. Fully yours.
+### Android Auto artwork, queue previews, and synchronized lyrics
 
-[![Latest Release](https://img.shields.io/github/v/release/mardous/BoomingMusic?style=for-the-badge&label=Release&logo=github)](https://github.com/mardous/BoomingMusic/releases/latest)
-[![F-Droid version](https://img.shields.io/f-droid/v/com.mardous.booming?style=for-the-badge&label=F-Droid&logo=fdroid)](https://f-droid.org/packages/com.mardous.booming/)
-[![Downloads](https://img.shields.io/github/downloads/mardous/BoomingMusic/total?style=for-the-badge&logo=github&label=Downloads)](https://github.com/mardous/BoomingMusic/releases)
+**An unofficial fork of [mardous/BoomingMusic](https://github.com/mardous/BoomingMusic).**
+
+This repository contains fork-specific changes. It is not an official Booming Music release and is not maintained by the upstream project.
+
+[![Upstream Release](https://img.shields.io/github/v/release/mardous/BoomingMusic?style=for-the-badge&label=Upstream%20Release&logo=github)](https://github.com/mardous/BoomingMusic/releases/latest)
+[![Upstream F-Droid version](https://img.shields.io/f-droid/v/com.mardous.booming?style=for-the-badge&label=Upstream%20F-Droid&logo=fdroid)](https://f-droid.org/packages/com.mardous.booming/)
+[![Upstream Downloads](https://img.shields.io/github/downloads/mardous/BoomingMusic/total?style=for-the-badge&logo=github&label=Upstream%20Downloads)](https://github.com/mardous/BoomingMusic/releases)
 [![License: GPL v3](https://img.shields.io/github/license/mardous/BoomingMusic?style=for-the-badge&color=orange&label=License&logo=gnu)](LICENSE.txt)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor_Covenant-2.1-4baaaa.svg?style=for-the-badge&logo=contributorcovenant)](CODE_OF_CONDUCT.md)
-[![Telegram Channel](https://img.shields.io/badge/Telegram-Join_Chat-blue?style=for-the-badge&logo=telegram)](https://t.me/mardousdev)
+[![Upstream Telegram Channel](https://img.shields.io/badge/Telegram-Upstream_Chat-blue?style=for-the-badge&logo=telegram)](https://t.me/mardousdev)
 
 </div>
 
 ## 🗂️ Table of Contents
 
-- [✨ Key Features](#-key-features)
+- [What this fork changes](#what-this-fork-changes)
+- [Car controls](#car-controls)
+- [✨ Features inherited from Booming Music](#-features-inherited-from-booming-music)
 - [📸 Screenshots](#-screenshots)
 - [📥 Download & Install](#-download--install)
 - [💻 Tech Stack](#-tech-stack)
@@ -28,7 +34,37 @@
 - [🙌 Credits](#-credits)
 - [⚖️ License](#-license)
 
-## ✨ Key Features
+## What this fork changes
+
+The changes below are relative to the upstream base, [commit `da051803`](https://github.com/mardous/BoomingMusic/commit/da051803a3046b82ba7b633ed7f905240dcb8c5a). Booming Music already provides Android Auto integration, synchronized lyrics, and the player features listed further below.
+
+| Area | Changes in this fork |
+|:-----|:---------------------|
+| Car artwork loading | Bounded caches share decoded covers and encoded bytes between the media session and the artwork provider. Playback covers are resized to at most 512 pixels per side, and nearby covers are prefetched in playback order from local or cached artwork. Revisioned URIs prevent reusing outdated covers. |
+| Lyrics in car artwork | A dedicated artwork mode shows the current and next synchronized lyric lines. Cards are rendered in the background, updates follow lyric timestamps, and a neutral placeholder prevents the normal album cover from flashing while a card is prepared. |
+| Up-next artwork preview | A dedicated button shows the current song with its title and cover, followed by up to four upcoming tracks. It follows shuffle and repeat settings, redraws only when its content changes, and prepares the next card when its cover is already cached. |
+| Stable song metadata | Lyrics stay inside the artwork and never replace the song title, display title, subtitle, or artist sent through the media session. These fields remain intact when switching artwork modes. |
+| Shared lyrics state | The phone and car use a shared coordinator with cancellation on track changes, bounded caching, and separate loading, missing, instrumental, and error states. Late results from a previous song cannot replace the current presentation. |
+| Lyrics reliability | Provider failures are distinguished from missing lyrics, instrumental results are preserved, empty LRCLIB responses are handled, file encoding detection is bounded, and the preferred lyrics file format setting uses the correct values. |
+| Playback work | Unnecessary queue scans are skipped when sequential queue handling is disabled. Car button layouts are published only when they change. |
+
+These changes focus on responsiveness and avoiding unnecessary background work. The car host controls artwork size, layout, and button placement; behavior has been checked in an Android Automotive emulator and still needs validation on individual vehicles.
+
+## Car controls
+
+The additional artwork modes are enabled in the **`github` build flavor** for Android Auto and Android Automotive controllers. The `fdroid` and `playstore` flavors do not enable these extra controls.
+
+- **Lyrics cover on:** display lyrics inside the artwork area. Press the button again to restore the normal cover.
+- **Show up next:** display the current song at the top and up to four following songs below it. Press the button again to restore the normal cover.
+- The two modes are mutually exclusive. Selecting one replaces the other, and the selected mode is restored when the car reconnects.
+
+The up-next view is a read-only preview inside the artwork area, not a separate browser screen. Use the car's normal queue and playback controls to select or skip tracks. Depending on the host, the extra buttons may appear in the overflow menu.
+
+For synchronized lyrics, the artwork shows the active line and the following line when available. Plain lyrics, instrumental tracks, missing lyrics, and loading failures have their own status cards. Song text metadata remains unchanged in every mode.
+
+## ✨ Features inherited from Booming Music
+
+The following features and phone screenshots come from the original Booming Music project.
 
 - 🎼 **Automatic Lyrics Download & Editing** – Automatically fetch, sync, and edit lyrics with ease.
 - 💬 **Word-by-Word Synced Lyrics** – Enjoy immersive real-time lyric playback with word-level timing.
@@ -76,7 +112,38 @@
 
 ## 📥 Download & Install
 
-Booming Music is available for download from various sources:
+### Build this fork
+
+This repository currently provides the fork's source code. To build an optimized APK, use JDK 21 and an Android SDK installation matching the project's SDK requirements:
+
+```sh
+git clone https://github.com/Poiki/BoomingMusicLyrics.git
+cd BoomingMusicLyrics
+./gradlew :app:assembleGithubRelease
+```
+
+On Windows, use `gradlew.bat` instead of `./gradlew`. APKs are written to `app/build/outputs/apk/github/release/`:
+
+- `*-github-arm64-v8a.apk`: ARM64 phones, including the OnePlus 15.
+- `*-github-universal.apk`: all supported architectures in one larger APK.
+
+The release app is named **Booming Music**, without the **Debug** suffix. It retains the upstream application ID, `com.mardous.booming`, and version numbering. Installing it over an official build requires a matching signing key. The debug variant uses a separate application ID and can remain installed alongside it.
+
+Release signing uses the existing keystore configuration when supplied; otherwise, the project falls back to the local debug signing key. Configure a consistent signing key for builds you distribute or update.
+
+**Updater:** the built-in updater still points to the original `mardous/BoomingMusic` repository. It does not provide updates for this fork. Keep using builds from this source tree to retain the fork-specific changes.
+
+To run the regression tests:
+
+```sh
+./gradlew :app:testGithubDebugUnitTest
+```
+
+The current changes include 43 unit tests covering lyrics resolution, stale result rejection, artwork caching, mode switching, and queue ordering. Car checks also cover metadata preservation, track changes, shuffle, repeat, and switching artwork modes in an Android Automotive emulator.
+
+### Official upstream downloads
+
+The links below distribute the original Booming Music application. They do **not** include this fork's additions.
 
 <div align="center">
 
@@ -107,6 +174,8 @@ Booming Music is available for download from various sources:
 
 ## 🧩 Roadmap
 
+This is the upstream project's roadmap, retained for reference; it is not a delivery plan for this fork.
+
 - [ ] 📦 Independent library scanner (no MediaStore dependency)
 - [ ] 🎨 Multi-artist support (split & index properly)
 - [ ] 🎵 Improved genre handling
@@ -115,6 +184,11 @@ Booming Music is available for download from various sources:
 - [ ] 🌐 Jellyfin & Navidrome integration
 
 ## 🔗 Useful Links
+
+- **[This fork](https://github.com/Poiki/BoomingMusicLyrics)** — source code and fork-specific changes.
+- **[Original Booming Music](https://github.com/mardous/BoomingMusic)** — official project and upstream development.
+
+The documentation, community, and translation links below belong to the upstream project.
 
 - 🔐 **[Requested Permissions](https://github.com/mardous/BoomingMusic/wiki/Advanced-Info#-permissions)**  
   What the app needs and why
@@ -150,6 +224,8 @@ You can also:
 [![Translation Status](https://hosted.weblate.org/widget/booming-music/horizontal-auto.svg)](https://hosted.weblate.org/projects/booming-music/)
 
 ## 💖 Support Development
+
+The support information and acknowledgments below are retained from the original project. These links support upstream Booming Music development.
 
 Booming Music is an open-source project developed and maintained with passion in my spare time.
 If you enjoy the app and the free features it offers, please consider supporting me to help cover

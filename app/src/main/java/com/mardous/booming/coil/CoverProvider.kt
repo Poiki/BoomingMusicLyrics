@@ -100,6 +100,7 @@ class CoverProvider : ContentProvider(), KoinComponent {
         size: Point?
     ): AssetFileDescriptor? {
         val context = context ?: return null
+        val playbackArtwork = PlaybackArtworkStore.isPlaybackArtwork(uri)
         val masked = uri.getQueryParameter(SHAPE_PARAM) == SHAPE_COOKIE
         val format = if (masked) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
 
@@ -120,6 +121,11 @@ class CoverProvider : ContentProvider(), KoinComponent {
                 }
             }
 
+            PlaybackArtworkStore.get(uri)?.let { cached ->
+                writeDataCommon(cfd, scope, context) { cached.bytes }
+                return@launch
+            }
+
             val data = getDataForUri(uri)
             if (data == null) {
                 servePlaceholder(cfd, scope, context, masked)
@@ -130,7 +136,9 @@ class CoverProvider : ContentProvider(), KoinComponent {
                 ImageRequest.Builder(context)
                     .data(data)
                     .let { request ->
-                        if (size != null) {
+                        if (playbackArtwork) {
+                            request.size(PlaybackArtworkStore.IMAGE_SIZE)
+                        } else if (size != null) {
                             request.size(size.x, size.y)
                         } else if (uri.getBooleanQueryParameter("hd", false)) {
                             request
@@ -139,10 +147,10 @@ class CoverProvider : ContentProvider(), KoinComponent {
                             request.size { getSmallSize(context).run { Size(x, y) } }
                         }
                     }
-                    .memoryCachePolicy(CachePolicy.WRITE_ONLY)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
                     .allowHardware(false)
                     .decoderFactory { result: SourceFetchResult, options: Options, _ ->
-                        if (masked) return@decoderFactory null // Must re-encode to PNG
+                        if (masked || playbackArtwork) return@decoderFactory null
 
                         val src: BufferedSource = result.source.source()
                         src.peek().let { peekSrc: BufferedSource ->
@@ -182,9 +190,16 @@ class CoverProvider : ContentProvider(), KoinComponent {
                                     writeDataCommon(cfd, scope, context) {
                                         val bitmap = image.toBitmap()
                                         val processed = if (masked) CookieMask.apply(context, bitmap) else bitmap
-                                        val os = ByteArrayOutputStream()
-                                        processed.compress(format, 95, os)
-                                        os.toByteArray()
+                                        if (playbackArtwork && !masked) {
+                                            val artwork = PlaybackArtworkStore.encode(processed)
+                                            PlaybackArtworkStore.put(uri, artwork)
+                                            artwork.bytes
+                                        } else {
+                                            ByteArrayOutputStream().use { os ->
+                                                processed.compress(format, 95, os)
+                                                os.toByteArray()
+                                            }
+                                        }
                                     }
                                 }
                             }

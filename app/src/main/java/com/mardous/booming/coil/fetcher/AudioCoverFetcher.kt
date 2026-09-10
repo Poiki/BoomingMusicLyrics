@@ -2,6 +2,7 @@ package com.mardous.booming.coil.fetcher
 
 import android.content.SharedPreferences
 import android.util.Log
+import coil3.Extras
 import coil3.ImageLoader
 import coil3.decode.DataSource
 import coil3.decode.ImageSource
@@ -49,6 +50,7 @@ class AudioCoverFetcher(
         }
 
         if (stream == null &&
+            options.extras[LOCAL_ONLY] != true &&
             !cover.artistName.isArtistNameUnknown() &&
             NetworkFeature.Images.Albums.isEnabled) {
             val imageUrl = if (cover.isAlbum) {
@@ -94,5 +96,9 @@ class AudioCoverFetcher(
                 imageSize = preferences.requireString(PREFERRED_IMAGE_SIZE, ImageSize.MEDIUM)
             )
         }
+    }
+
+    companion object {
+        val LOCAL_ONLY = Extras.Key(default = false)
     }
 }

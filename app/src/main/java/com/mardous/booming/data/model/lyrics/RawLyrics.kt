@@ -62,7 +62,11 @@ sealed interface RawLyrics : Parcelable {
 
         override fun accept(other: RawLyrics?): Remote {
             if (other is Remote) {
-                return accept(other.plain, other.synced)
+                val accepted = accept(other.plain, other.synced)
+                return accepted.copy(
+                    instrumental = !accepted.hasPlain && !accepted.hasSynced &&
+                            (instrumental || other.instrumental)
+                )
             }
             return this
         }
@@ -79,6 +83,9 @@ sealed interface RawLyrics : Parcelable {
         }
 
         fun prepareToStore(): Stored? {
+            if (instrumental && !hasPlain && !hasSynced) {
+                return Stored(instrumental = true)
+            }
             val contentToStore = synced ?: plain
             if (contentToStore != null) {
                 return Stored(
