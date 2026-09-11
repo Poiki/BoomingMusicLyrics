@@ -85,7 +85,9 @@ import com.mardous.booming.extensions.isBluetoothA2dpDisconnected
 import com.mardous.booming.extensions.showToast
 import com.mardous.booming.playback.equalizer.EqualizerManager
 import com.mardous.booming.playback.library.LibraryProvider
+import com.mardous.booming.playback.library.CarQueueBrowser
 import com.mardous.booming.playback.library.MediaIDs
+import com.mardous.booming.playback.queue.carRootChildren
 import com.mardous.booming.playback.lyrics.CarLyricsMetadataPlayer
 import com.mardous.booming.playback.lyrics.CarLyricsArtworkStore
 import com.mardous.booming.playback.lyrics.CarLyricsOverlayController
@@ -188,6 +190,10 @@ class PlaybackService :
     private lateinit var customCommands: List<CommandButton>
     private lateinit var player: AdvancedForwardingPlayer
     private lateinit var carLyricsPlayer: CarLyricsMetadataPlayer
+    private lateinit var carQueueBrowser: CarQueueBrowser
+    private val carRootLimits = mutableMapOf<MediaSession.ControllerInfo, Int>()
+    private var queueBrowserUpdateJob: Job? = null
+    private val queueBrowserParents = mutableSetOf<String>()
     private lateinit var carLyricsOverlayController: CarLyricsOverlayController
     private lateinit var artworkPreloader: PlaybackArtworkPreloader
     private var carBridgeEstablished = false
@@ -365,7 +371,10 @@ class PlaybackService :
         player.setSequentialTimelineEnabled(sequentialTimeline)
         player.addListener(this)
 
-        carLyricsPlayer = CarLyricsMetadataPlayer(player, CarLyricsArtworkStore.placeholderUri(this))
+        carQueueBrowser = CarQueueBrowser(this, player.exoPlayer)
+        carLyricsPlayer = CarLyricsMetadataPlayer(player, CarLyricsArtworkStore.placeholderUri(this)).apply {
+            selectQueueItem = carQueueBrowser::select
+        }
         carLyricsOverlayController = CarLyricsOverlayController(
             context = this,
             player = player,
@@ -538,6 +547,7 @@ class PlaybackService :
 
     override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) {
         publishedButtonLayouts.remove(controller)
+        carRootLimits.remove(controller)
         if (BuildConfig.DEBUG && session.isCarController(controller)) {
             Log.d(
                 TAG,
@@ -580,6 +590,11 @@ class PlaybackService :
         params: LibraryParams?
     ): ListenableFuture<LibraryResult<MediaItem>> {
         val isKnownCaller = packageValidator.isKnownCaller(browser.packageName, browser.uid)
+        if (session.isCarController(browser)) {
+            val key = MediaConstants.BROWSER_ROOT_HINTS_KEY_ROOT_CHILDREN_LIMIT
+            carRootLimits[browser] = (params?.extras?.getInt(key, 0)?.takeIf { it > 0 }
+                ?: browser.connectionHints.getInt(key, 4)).coerceIn(1, 8)
+        }
         val outExtras = Bundle().apply {
             putBoolean(MediaConstants.BROWSER_SERVICE_EXTRAS_KEY_SEARCH_SUPPORTED, isKnownCaller)
         }
@@ -632,9 +647,22 @@ class PlaybackService :
         // getChildren resolves any id it is handed, so FAVORITES and HISTORY are reachable without ever
         // appearing in a root listing.
         session.denyUntrusted<ImmutableList<MediaItem>>(browser)?.let { return it }
+        if (carQueueBrowser.isQueueParent(parentId)) {
+            queueBrowserParents.add(parentId)
+            return Futures.immediateFuture(LibraryResult.ofItemList(carQueueBrowser.children(parentId), params))
+        }
+        val isCar = session.isCarController(browser)
+        val rootLimit = carRootLimits[browser] ?: 4
         return serviceScope.future(IO) {
             val result = runCatching {
-                libraryProvider.getChildren(this@PlaybackService, parentId)
+                val children = libraryProvider.getChildren(this@PlaybackService,
+                    if (parentId == MediaIDs.CAR_LIBRARY) MediaIDs.ROOT else parentId)
+                when {
+                    parentId == MediaIDs.ROOT && isCar -> carRootChildren(
+                        children, carQueueBrowser.root, carQueueBrowser.library, rootLimit)
+                    parentId == MediaIDs.CAR_LIBRARY && rootLimit == 1 -> listOf(carQueueBrowser.root) + children
+                    else -> children
+                }
             }
             if (result.isSuccess) {
                 LibraryResult.ofItemList(result.getOrThrow(), params)
@@ -650,6 +678,9 @@ class PlaybackService :
         mediaId: String
     ): ListenableFuture<LibraryResult<MediaItem>> {
         session.denyUntrusted<MediaItem>(browser)?.let { return it }
+        carQueueBrowser.item(mediaId)?.let {
+            return Futures.immediateFuture(LibraryResult.ofItem(it, null))
+        }
         return serviceScope.future(IO) {
             val mediaItem = runCatching { libraryProvider.getItem(mediaId) }
                 .getOrDefault(MediaItem.EMPTY)
@@ -707,6 +738,14 @@ class PlaybackService :
         startIndex: Int,
         startPositionMs: Long
     ): ListenableFuture<MediaItemsWithStartPosition> {
+        if (mediaItems.any { CarQueueBrowser.isQueueItem(it.mediaId) }) {
+            if (!mediaSession.isTrustedController(controller) || mediaItems.size != 1) {
+                return Futures.immediateFailedFuture(IllegalArgumentException("Invalid queue selection"))
+            }
+            val item = carQueueBrowser.item(mediaItems.single().mediaId)
+                ?: return Futures.immediateFailedFuture(IllegalArgumentException("Queue item is no longer available"))
+            return Futures.immediateFuture(MediaItemsWithStartPosition(listOf(item), 0, startPositionMs))
+        }
         player.exoPlayer.let { exoPlayer ->
             if (exoPlayer.shuffleOrder !is ImprovedShuffleOrder && !hasSetUnshuffledOrder) {
                 exoPlayer.applyRandomShuffleOrder()
@@ -1068,7 +1107,9 @@ class PlaybackService :
                 Player.EVENT_REPEAT_MODE_CHANGED
             )) {
             prefetchNextReplayGain()
+            invalidateQueueBrowser()
         }
+        if (events.contains(Player.EVENT_MEDIA_METADATA_CHANGED)) invalidateQueueBrowser()
     }
 
     /*
@@ -1153,6 +1194,26 @@ class PlaybackService :
         artworkPreloader.invalidate()
         carLyricsPlayer.refreshArtwork()
         carLyricsOverlayController.refreshArtwork()
+        invalidateQueueBrowser()
+    }
+
+    private fun invalidateQueueBrowser() {
+        if (!::carQueueBrowser.isInitialized) return
+        carQueueBrowser.invalidate()
+        if (queueBrowserParents.isEmpty() || queueBrowserUpdateJob?.isActive == true) return
+        queueBrowserUpdateJob = serviceScope.launch {
+            delay(100)
+            val session = mediaSession ?: return@launch
+            val iterator = queueBrowserParents.iterator()
+            while (iterator.hasNext()) {
+                val parentId = iterator.next()
+                if (session.getSubscribedControllers(parentId).isEmpty()) {
+                    iterator.remove()
+                } else {
+                    session.notifyChildrenChanged(parentId, Int.MAX_VALUE, null)
+                }
+            }
+        }
     }
 
     private fun carLyricsModesBundle() = Bundle().apply {

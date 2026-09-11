@@ -169,6 +169,7 @@
     <string name="now_playing">Now playing</string>
     <string name="playing_queue_label">Playing queue</string>
     <string name="up_next">Up Next</string>
+    <string name="car_queue_more">More songs</string>
     <string name="reorder_action">Reorder</string>
     <string name="go_to_current_track">Go to current track</string>
     <string name="list_start">List start</string>

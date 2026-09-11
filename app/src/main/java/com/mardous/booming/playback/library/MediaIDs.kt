@@ -2,6 +2,8 @@ package com.mardous.booming.playback.library
 
 object MediaIDs {
     const val ROOT = "ROOT"
+    const val CAR_UP_NEXT = "CAR_UP_NEXT"
+    const val CAR_LIBRARY = "CAR_LIBRARY"
     const val SONGS = "SONGS"
     const val ALBUMS = "ALBUMS"
     const val ARTISTS = "ARTISTS"

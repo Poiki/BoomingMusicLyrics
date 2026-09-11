@@ -3,10 +3,14 @@ package com.mardous.booming.playback.lyrics
 import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingSimpleBasePlayer
+import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.mardous.booming.coil.PlaybackArtworkStore
+import com.mardous.booming.playback.library.CarQueueBrowser
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 
 /**
  * Session-facing player that can replace only the current combined metadata.
@@ -18,6 +22,23 @@ import com.mardous.booming.coil.PlaybackArtworkStore
 internal class CarLyricsMetadataPlayer(player: Player, placeholder: Uri) : ForwardingSimpleBasePlayer(player) {
 
     private val overlay = CarLyricsOverlayState(placeholder)
+    var selectQueueItem: ((String, Long) -> Boolean)? = null
+
+    override fun handleSetMediaItems(
+        mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long
+    ): ListenableFuture<*> {
+        if (mediaItems.any { CarQueueBrowser.isQueueItem(it.mediaId) }) {
+            // Legacy playFromMediaId always calls setMediaItems. Seek before it can replace the
+            // playlist, preserving duplicate entries, shuffle order, and preloaded media sources.
+            return if (mediaItems.size == 1 &&
+                selectQueueItem?.invoke(mediaItems.single().mediaId, startPositionMs) == true) {
+                Futures.immediateVoidFuture()
+            } else {
+                Futures.immediateFailedFuture<Void>(IllegalArgumentException("Queue item is no longer available"))
+            }
+        }
+        return super.handleSetMediaItems(mediaItems, startIndex, startPositionMs)
+    }
 
     val sourceMetadata: MediaMetadata
         get() = if (getPlayer().isCommandAvailable(Player.COMMAND_GET_METADATA)) {
