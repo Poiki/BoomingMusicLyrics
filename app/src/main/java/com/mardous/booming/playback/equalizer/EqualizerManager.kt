@@ -73,6 +73,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
+import com.mardous.booming.playback.renderer.preferHighPrecisionAudio
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -294,8 +297,25 @@ class EqualizerManager(
         .stateIn(eqScope, SharingStarted.Eagerly, false)
 
     val audioFloatOutput = context.eqDataStore.data
-        .map { prefs -> prefs[Keys.AUDIO_FLOAT_OUTPUT] ?: false }
-        .stateIn(eqScope, SharingStarted.Eagerly, false)
+        .map { prefs -> prefs.preferHighPrecisionOutput() }
+        .stateIn(eqScope, SharingStarted.Eagerly, true)
+
+    fun loadAudioFloatOutput(): Boolean = runBlocking(Dispatchers.IO) {
+        // The sink is created synchronously. Read the saved choice once instead of using the
+        // StateFlow's initial value, which can select the wrong output on a cold service start.
+        context.eqDataStore.data.first().preferHighPrecisionOutput()
+    }
+
+    private fun androidx.datastore.preferences.core.Preferences.preferHighPrecisionOutput(): Boolean =
+        preferHighPrecisionAudio(
+            explicitPreference = this[Keys.AUDIO_FLOAT_OUTPUT],
+            processingEnabled = this[Keys.EQ_ENABLED] == true ||
+                this[Keys.SKIP_SILENCE] == true ||
+                (this[Keys.CENTER_BALANCE] ?: 0f) != 0f ||
+                (this[Keys.SPEED] ?: 1f) != 1f ||
+                (this[Keys.PITCH] ?: 1f) != 1f ||
+                (this[Keys.REPLAYGAIN_MODE]?.toEnum<ReplayGainMode>() ?: ReplayGainMode.Off).isOn
+        )
 
     val skipSilence = context.eqDataStore.data
         .map { prefs -> prefs[Keys.SKIP_SILENCE] ?: false }

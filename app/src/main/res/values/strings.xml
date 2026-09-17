@@ -170,6 +170,7 @@
     <string name="playing_queue_label">Playing queue</string>
     <string name="up_next">Up Next</string>
     <string name="car_queue_more">More songs</string>
+    <string name="library_title_with_count">%1$s · %2$s</string>
     <string name="reorder_action">Reorder</string>
     <string name="go_to_current_track">Go to current track</string>
     <string name="list_start">List start</string>
@@ -527,17 +528,13 @@
     <string name="enable_audio_offload_title">Audio Offload</string>
     <string name="enable_audio_offload_description">Hardware-accelerated playback to reduce CPU usage and save battery. App restart required.</string>
     <string name="enable_audio_float_output_title">High-Precision Audio Output</string>
-    <string name="enable_audio_float_output_description">Enables 32-bit floating-point output for maximum fidelity. App restart required.</string>
+    <string name="enable_audio_float_output_description">Preserves high-resolution audio using 32-bit floating-point output where supported. Enabled by default when no sound processing is configured. Balance, ReplayGain, silence skipping and app tempo processing are bypassed in this mode. App restart required.</string>
     <string name="skip_silence_title">Skip Silence</string>
     <string name="skip_silence_description">Automatically detects and omits silent sections. Ideal for podcasts and voice recordings.</string>
 
     <!-- Lyrics viewer -->
     <string name="action_show_lyrics">Show lyrics</string>
     <string name="action_hide_lyrics">Hide lyrics</string>
-    <string name="action_show_queue_artwork">Show up next</string>
-    <string name="action_hide_queue_artwork">Hide up next</string>
-    <string name="car_queue_end">End of queue</string>
-    <string name="car_queue_repeat_one">Repeating this song</string>
     <string name="action_show_lyrics_artwork">Lyrics cover on</string>
     <string name="action_hide_lyrics_artwork">Lyrics cover off</string>
     <string name="car_lyrics_loading">Loading lyrics…</string>

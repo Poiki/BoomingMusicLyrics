@@ -31,6 +31,8 @@ import com.mardous.booming.data.model.Song
 import com.mardous.booming.ui.ISongCallback
 import com.mardous.booming.ui.adapters.song.SongAdapter
 import com.mardous.booming.ui.component.base.AbsRecyclerViewCustomGridSizeFragment
+import com.mardous.booming.ui.component.views.TopAppBarLayout
+import java.text.NumberFormat
 import com.mardous.booming.ui.component.menu.onSongMenu
 import com.mardous.booming.ui.component.menu.onSongsMenu
 import com.mardous.booming.ui.screen.library.ReloadType
@@ -53,6 +55,10 @@ class SongListFragment : AbsRecyclerViewCustomGridSizeFragment<SongAdapter, Grid
         super.onViewCreated(view, savedInstanceState)
         libraryViewModel.getSongs().observe(viewLifecycleOwner) { songs ->
             adapter?.dataSet = songs
+            view.findViewById<TopAppBarLayout>(R.id.appBarLayout).title = getString(
+                R.string.library_title_with_count, getString(titleRes),
+                NumberFormat.getIntegerInstance().format(songs.size)
+            )
         }
     }
 

@@ -42,8 +42,9 @@ The changes below are relative to the upstream base, [commit `da051803`](https:/
 |:-----|:---------------------|
 | Car artwork loading | Bounded caches share decoded covers and encoded bytes between the media session and the artwork provider. Playback covers are resized to at most 512 pixels per side, and nearby covers are prefetched in playback order from local or cached artwork. Revisioned URIs prevent reusing outdated covers. |
 | Lyrics in car artwork | A dedicated artwork mode shows the current and next synchronized lyric lines. Cards are rendered in the background, updates follow lyric timestamps, and a neutral placeholder prevents the normal album cover from flashing while a card is prepared. |
-| Up-next artwork preview | A dedicated button shows the current song with its title and cover, followed by up to four upcoming tracks. It follows shuffle and repeat settings, redraws only when its content changes, and prepares the next card when its cover is already cached. |
-| Native up-next browser | An **Up Next** library section shows the current song first, followed by upcoming songs with their own covers. Selecting a row seeks to that queue entry without replacing the playlist or shuffle order. Lists use cached metadata and artwork, update on playback events, and show at most 40 songs per screen with a **More songs** folder for the rest. |
+| Native up-next browser | A compact **Next** tab shows the current song first, followed by upcoming songs with their own covers under **Up Next**. The current row has a stable ID, unchanged rows are reused, and duplicate updates are suppressed. Selecting a row seeks to that queue entry without replacing the playlist or shuffle order. Lists show at most 40 songs per screen with a **More songs** folder for the rest. |
+| Song totals | The phone's Songs title and the car's Songs section display the library total, respecting library filters. The phone reuses its loaded list; car category counts query IDs without loading every song's metadata. |
+| Audio output | High-precision PCM output is the default when no sound processing is configured, while explicit output preferences and existing sound processing settings are respected. The saved output choice is loaded before constructing the sink. Neutral balance avoids per-sample calculations, and optional hardware offload requires gapless support plus speed/pitch support only when needed. |
 | Stable song metadata | Lyrics stay inside the artwork and never replace the song title, display title, subtitle, or artist sent through the media session. These fields remain intact when switching artwork modes. |
 | Shared lyrics state | The phone and car use a shared coordinator with cancellation on track changes, bounded caching, and separate loading, missing, instrumental, and error states. Late results from a previous song cannot replace the current presentation. |
 | Lyrics reliability | Provider failures are distinguished from missing lyrics, instrumental results are preserved, empty LRCLIB responses are handled, file encoding detection is bounded, and the preferred lyrics file format setting uses the correct values. |
@@ -53,19 +54,24 @@ These changes focus on responsiveness and avoiding unnecessary background work. 
 
 ## Car controls
 
-Open **Up Next** in the car's media library to browse the playback queue. The current song appears under **Now playing**; tap an upcoming song to play it. The list follows the active shuffle and repeat settings, including showing only the current song under repeat-one. Selecting the current song resumes it without restarting it. Duplicate songs are treated as separate queue entries.
+Open **Next** in the car's media library to browse the playback queue. The short tab label avoids truncation on narrow car screens. The current song appears first with **Now playing** beside the artist; upcoming songs appear under the full-width **Up Next** heading. Tap an upcoming song to play it. The list follows the active shuffle and repeat settings, including showing only the current song under repeat-one. Selecting the current song resumes it without restarting it. Duplicate songs are treated as separate queue entries.
 
-When the host limits the number of tabs, **Library** keeps all the original categories accessible. On hosts allowing only one tab, **Up Next** is inside **Library**. Layout and navigation are rendered by Android Auto or Android Automotive.
+When the host limits the number of tabs, **Library** keeps all the original categories accessible. On hosts allowing only one tab, **Next** is inside **Library**. Layout, tab widths, and transition animations are rendered by Android Auto or Android Automotive.
 
-The additional artwork modes are enabled in the **`github` build flavor** for Android Auto and Android Automotive controllers. The `fdroid` and `playstore` flavors do not enable these extra controls.
+The lyrics artwork mode is enabled in the **`github` build flavor** for Android Auto and Android Automotive controllers. The `fdroid` and `playstore` flavors do not enable this extra control.
 
 - **Lyrics cover on:** display lyrics inside the artwork area. Press the button again to restore the normal cover.
-- **Show up next:** display the current song at the top and up to four following songs below it. Press the button again to restore the normal cover.
-- The two modes are mutually exclusive. Selecting one replaces the other, and the selected mode is restored when the car reconnects.
+- The selected lyrics mode is restored when the car reconnects.
 
-The **Show up next** artwork button remains available as an optional read-only preview. Use the **Up Next** library section to select individual tracks. Depending on the host, the artwork buttons may appear in the overflow menu.
+The old queue preview inside album artwork has been removed. Use the native **Next** library section to browse and select tracks. Depending on the host, the lyrics button may appear in the overflow menu.
 
 For synchronized lyrics, the artwork shows the active line and the following line when available. Plain lyrics, instrumental tracks, missing lyrics, and loading failures have their own status cards. Song text metadata remains unchanged in every mode.
+
+### Audio precision
+
+The existing **High-Precision Audio Output** setting requests floating-point PCM from supported platform decoders and preserves high-resolution samples through the app's output path. Explicitly configured balance, ReplayGain, silence skipping, tempo, or equalizer settings retain the normal processing path unless high precision is explicitly selected. Output-mode changes require restarting the app. [Media3's floating-point output path](https://github.com/androidx/media/blob/1.11.0/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/audio/DefaultAudioSink.java) bypasses its app audio-processing chain.
+
+FLAC playback has been checked with 16-bit/48 kHz and 24-bit/96 kHz files in an Android Automotive emulator: the app's active AudioTrack used floating-point PCM at the respective input sample rates. This does not guarantee bit-perfect output from a physical OnePlus, Bluetooth connection, or car. Android's mixer and the connected output device can resample or encode the signal. Hardware offload remains optional and depends on the device's reported capabilities.
 
 ## ✨ Features inherited from Booming Music
 
@@ -144,7 +150,7 @@ To run the regression tests:
 ./gradlew :app:testGithubDebugUnitTest
 ```
 
-The current changes include 51 unit tests covering lyrics resolution, stale result rejection, artwork caching, mode switching, queue ordering, bounded queue pages, stable queue-entry references, and car tab limits. Android Automotive emulator checks also cover metadata preservation, track changes, shuffle, repeat, switching artwork modes, live browser updates, and selecting browser rows without replacing the queue or shuffle order.
+The current changes include 56 unit tests covering lyrics resolution, stale result rejection, artwork caching, lyrics mode switching, bounded queue pages, stable queue-entry references, car tab limits, duplicate browser-update suppression, audio output preferences, and neutral balance sample preservation. Android Automotive emulator checks also cover metadata preservation, track changes, shuffle, repeat, live browser updates, song totals, and selecting browser rows without replacing the queue or shuffle order.
 
 ### Official upstream downloads
 

@@ -10,14 +10,14 @@ import java.nio.ByteOrder
 
 @OptIn(UnstableApi::class)
 class BalanceAudioProcessor(
-    private var leftGain: Float = 1.0f,
-    private var rightGain: Float = 1.0f
+    leftGain: Float = 1.0f,
+    rightGain: Float = 1.0f
 ) : BaseAudioProcessor() {
+    private data class Gains(val left: Float, val right: Float)
+    @Volatile private var gains = Gains(leftGain, rightGain)
 
-    @Synchronized
     fun setBalance(left: Float, right: Float) {
-        leftGain = left
-        rightGain = right
+        gains = Gains(left, right)
     }
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
@@ -33,6 +33,11 @@ class BalanceAudioProcessor(
 
         val buffer = replaceOutputBuffer(remaining)
         buffer.order(ByteOrder.LITTLE_ENDIAN)
+        val (leftGain, rightGain) = gains
+        if (leftGain == 1f && rightGain == 1f) {
+            buffer.put(inputBuffer).flip()
+            return
+        }
 
         if (inputAudioFormat.channelCount == 2) {
             while (inputBuffer.remaining() >= 4) {

@@ -1,6 +1,7 @@
 package com.mardous.booming.playback.library
 
 import android.content.Context
+import android.os.Bundle
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
@@ -8,6 +9,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
+import androidx.media3.session.MediaConstants
 import com.mardous.booming.R
 import com.mardous.booming.coil.CoverProvider.Companion.ALBUM_ARTIST_COVER_PATH
 import com.mardous.booming.coil.CoverProvider.Companion.ALBUM_COVER_PATH
@@ -196,6 +198,7 @@ class LibraryProvider(private val repository: Repository) {
         return null
     }
 
+    @OptIn(UnstableApi::class)
     suspend fun getChildren(
         context: Context,
         parentId: String
@@ -210,6 +213,17 @@ class LibraryProvider(private val repository: Repository) {
         } else when (parentId) {
             MediaIDs.ROOT -> {
                 getRootChildren(context)
+            }
+
+            MediaIDs.SONGS -> {
+                val songs = getPlayableMediaItems(parentId)
+                val count = songs.size.asNumberOfSongs(context)
+                songs.map { item ->
+                    item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon()
+                        .setExtras(Bundle(item.mediaMetadata.extras ?: Bundle.EMPTY).apply {
+                            putString(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE, count)
+                        }).build()).build()
+                }
             }
 
             MediaIDs.ALBUMS -> {
@@ -277,7 +291,16 @@ class LibraryProvider(private val repository: Repository) {
         }
     }
 
-    fun getItem(itemId: String): MediaItem {
+    suspend fun getItem(context: Context, itemId: String): MediaItem {
+        if (itemId == MediaIDs.ROOT || itemId == MediaIDs.SONGS) {
+            val isSongs = itemId == MediaIDs.SONGS
+            return buildBrowsableMediaItem(
+                type = MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
+                id = itemId,
+                title = context.getString(if (isSongs) R.string.songs_label else R.string.library_title),
+                subtitle = if (isSongs) repository.songCount().asNumberOfSongs(context) else null
+            )
+        }
         val songId = itemId.toLongOrNull() ?: return MediaItem.EMPTY
         return repository.songById(songId).toPlayableMediaItem()
     }
@@ -299,7 +322,8 @@ class LibraryProvider(private val repository: Repository) {
                         buildBrowsableMediaItem(
                             type = MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
                             id = MediaIDs.SONGS,
-                            title = resources.getString(categoryInfo.category.titleRes)
+                            title = resources.getString(categoryInfo.category.titleRes),
+                            subtitle = repository.songCount().asNumberOfSongs(context)
                         )
                     }
 

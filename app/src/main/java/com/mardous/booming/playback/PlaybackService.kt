@@ -96,6 +96,7 @@ import com.mardous.booming.playback.processor.BalanceAudioProcessor
 import com.mardous.booming.playback.processor.ReplayGainAudioProcessor
 import com.mardous.booming.playback.renderer.AlacWorkaroundCodecSelector
 import com.mardous.booming.playback.renderer.BoomingMusicRenderersFactory
+import com.mardous.booming.playback.renderer.needsOffloadSpeedSupport
 import com.mardous.booming.ui.screen.MainActivity
 import com.mardous.booming.util.CLEAR_QUEUE_ON_COMPLETION
 import com.mardous.booming.util.ENABLE_HISTORY
@@ -122,6 +123,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.guava.future
@@ -163,6 +165,11 @@ class PlaybackService :
         invalidatePlaybackArtwork()
         WidgetDataSource.invalidate()
         dispatchPlayQueue(player)
+        mediaSession?.let { session ->
+            listOf(MediaIDs.ROOT, MediaIDs.CAR_LIBRARY, MediaIDs.SONGS).forEach { parent ->
+                session.notifyChildrenChanged(parent, Int.MAX_VALUE, null)
+            }
+        }
         mediaSession?.broadcastCustomCommand(
             SessionCommand(Playback.EVENT_MEDIA_CONTENT_CHANGED, Bundle.EMPTY),
             Bundle.EMPTY
@@ -251,22 +258,6 @@ class PlaybackService :
             else -> customCommands[2]
         }
 
-    private val carQueueArtworkCommand: CommandButton
-        get() = CommandButton.Builder(CommandButton.ICON_UNDEFINED)
-            .setCustomIconResId(R.drawable.ic_queue_music_24dp)
-            .setDisplayName(
-                getString(
-                    if (carLyricsOverlayController.isQueueEnabled) {
-                        R.string.action_hide_queue_artwork
-                    } else {
-                        R.string.action_show_queue_artwork
-                    }
-                )
-            )
-            .setSessionCommand(SessionCommand(Playback.TOGGLE_CAR_QUEUE_ARTWORK, Bundle.EMPTY))
-            .setSlots(CommandButton.SLOT_FORWARD_SECONDARY, CommandButton.SLOT_OVERFLOW)
-            .build()
-
     private val carLyricsArtworkCommand: CommandButton
         get() = CommandButton.Builder(CommandButton.ICON_ALBUM)
             .setCustomIconResId(
@@ -342,7 +333,7 @@ class PlaybackService :
                 )
                 .setRenderersFactory(
                     BoomingMusicRenderersFactory(this, balanceProcessor, replayGainProcessor)
-                        .setEnableAudioFloatOutput(equalizerManager.audioFloatOutput.value)
+                        .setEnableAudioFloatOutput(equalizerManager.loadAudioFloatOutput())
                         .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
                         .setMediaCodecSelector(AlacWorkaroundCodecSelector())
                         .setEnableDecoderFallback(true)
@@ -507,9 +498,6 @@ class PlaybackService :
         if (BuildConfig.CAR_LYRICS_OVERLAY_ENABLED &&
             (session.isCarController(controller) || session.isMediaNotificationController(controller))) {
             availableSessionCommands.add(
-                SessionCommand(Playback.TOGGLE_CAR_QUEUE_ARTWORK, Bundle.EMPTY)
-            )
-            availableSessionCommands.add(
                 SessionCommand(Playback.TOGGLE_CAR_LYRICS_ARTWORK, Bundle.EMPTY)
             )
         }
@@ -527,9 +515,8 @@ class PlaybackService :
             carBridgeEstablished = true
             if (!carLyricsModesRestored) {
                 carLyricsModesRestored = true
-                preferences.edit().remove("car_lyrics_title_mode").apply()
+                preferences.edit().remove("car_lyrics_title_mode").remove("car_queue_artwork_mode").apply()
                 carLyricsOverlayController.setModes(
-                    queueEnabled = preferences.getBoolean(CAR_QUEUE_ARTWORK_MODE, false),
                     artworkEnabled = preferences.getBoolean(CAR_LYRICS_ARTWORK_MODE, false)
                 )
             }
@@ -538,7 +525,6 @@ class PlaybackService :
                 Log.d(
                     TAG,
                     "Car controller connected: package=${controller.packageName}, " +
-                            "queueMode=${carLyricsOverlayController.isQueueEnabled}, " +
                             "artworkMode=${carLyricsOverlayController.isArtworkEnabled}"
                 )
             }
@@ -553,7 +539,6 @@ class PlaybackService :
                 TAG,
                 "Car controller disconnected: package=${controller.packageName}, " +
                         "bridge=$carBridgeEstablished, " +
-                        "queueMode=${carLyricsOverlayController.isQueueEnabled}, " +
                         "artworkMode=${carLyricsOverlayController.isArtworkEnabled}"
             )
         }
@@ -682,7 +667,7 @@ class PlaybackService :
             return Futures.immediateFuture(LibraryResult.ofItem(it, null))
         }
         return serviceScope.future(IO) {
-            val mediaItem = runCatching { libraryProvider.getItem(mediaId) }
+            val mediaItem = runCatching { libraryProvider.getItem(this@PlaybackService, mediaId) }
                 .getOrDefault(MediaItem.EMPTY)
             if (mediaItem != MediaItem.EMPTY) {
                 LibraryResult.ofItem(mediaItem, null)
@@ -815,20 +800,14 @@ class PlaybackService :
                 SessionResult(SessionResult.RESULT_SUCCESS)
             }
 
-            Playback.TOGGLE_CAR_QUEUE_ARTWORK,
             Playback.TOGGLE_CAR_LYRICS_ARTWORK -> {
                 val isLegacyCarBridge = session.isMediaNotificationController(controller) &&
                         carBridgeEstablished
                 if (BuildConfig.CAR_LYRICS_OVERLAY_ENABLED &&
                     (session.isCarController(controller) || isLegacyCarBridge)) {
-                    if (customCommand.customAction == Playback.TOGGLE_CAR_QUEUE_ARTWORK) {
-                        carLyricsOverlayController.toggleQueue()
-                    } else {
-                        carLyricsOverlayController.toggleArtwork()
-                    }
+                    carLyricsOverlayController.toggleArtwork()
                     preferences.edit()
                         .remove("car_lyrics_title_mode")
-                        .putBoolean(CAR_QUEUE_ARTWORK_MODE, carLyricsOverlayController.isQueueEnabled)
                         .putBoolean(CAR_LYRICS_ARTWORK_MODE, carLyricsOverlayController.isArtworkEnabled)
                         .apply()
                     refreshMediaButtonCustomLayout()
@@ -927,7 +906,7 @@ class PlaybackService :
 
     override fun onTimelineChanged(timeline: Timeline, reason: Int) {
         if (BuildConfig.DEBUG && timeline.isEmpty &&
-            (carLyricsOverlayController.isQueueEnabled || carLyricsOverlayController.isArtworkEnabled)) {
+            carLyricsOverlayController.isArtworkEnabled) {
             Log.d(TAG, "Timeline empty; retaining selected car lyrics modes")
         }
         refreshMediaButtonCustomLayout()
@@ -1193,7 +1172,6 @@ class PlaybackService :
         PlaybackArtworkStore.invalidate()
         artworkPreloader.invalidate()
         carLyricsPlayer.refreshArtwork()
-        carLyricsOverlayController.refreshArtwork()
         invalidateQueueBrowser()
     }
 
@@ -1202,7 +1180,7 @@ class PlaybackService :
         carQueueBrowser.invalidate()
         if (queueBrowserParents.isEmpty() || queueBrowserUpdateJob?.isActive == true) return
         queueBrowserUpdateJob = serviceScope.launch {
-            delay(100)
+            delay(32)
             val session = mediaSession ?: return@launch
             val iterator = queueBrowserParents.iterator()
             while (iterator.hasNext()) {
@@ -1210,17 +1188,15 @@ class PlaybackService :
                 if (session.getSubscribedControllers(parentId).isEmpty()) {
                     iterator.remove()
                 } else {
-                    session.notifyChildrenChanged(parentId, Int.MAX_VALUE, null)
+                    carQueueBrowser.changedChildren(parentId)?.let { children ->
+                        session.notifyChildrenChanged(parentId, children.size, null)
+                    }
                 }
             }
         }
     }
 
     private fun carLyricsModesBundle() = Bundle().apply {
-        putBoolean(
-            Playback.EXTRA_CAR_QUEUE_ARTWORK_ENABLED,
-            carLyricsOverlayController.isQueueEnabled
-        )
         putBoolean(
             Playback.EXTRA_CAR_LYRICS_ARTWORK_ENABLED,
             carLyricsOverlayController.isArtworkEnabled
@@ -1364,7 +1340,6 @@ class PlaybackService :
             if (isCarLyricsController) {
                 // Keep these preferences through transient empty timelines; some hosts cache removal.
                 add(carLyricsArtworkCommand)
-                add(carQueueArtworkCommand)
             }
             if (!player.currentTimeline.isEmpty) {
                 add(repeatCommand)
@@ -1426,7 +1401,9 @@ class PlaybackService :
                 .collect { mode -> if (mode.isOn) submitReplayGain() }
         }
         serviceScope.launch {
-            equalizerManager.audioOffload.collect { audioOffloadingEnabled ->
+            combine(equalizerManager.audioOffload, equalizerManager.tempoState) { enabled, tempo ->
+                enabled to needsOffloadSpeedSupport(tempo.speed, tempo.actualPitch)
+            }.distinctUntilChanged().collect { (audioOffloadingEnabled, needsSpeedSupport) ->
                 player.trackSelectionParameters = player.trackSelectionParameters
                     .buildUpon()
                     .setAudioOffloadPreferences(
@@ -1436,7 +1413,8 @@ class PlaybackService :
                                     AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
                                 else AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
                             )
-                            .setIsSpeedChangeSupportRequired(true)
+                            .setIsSpeedChangeSupportRequired(needsSpeedSupport)
+                            .setIsGaplessSupportRequired(true)
                             .build()
                     )
                     .build()
@@ -1559,7 +1537,6 @@ class PlaybackService :
         private const val CHANNEL_ID = "playing_notification"
 
         private const val TAG = "PlaybackService"
-        private const val CAR_QUEUE_ARTWORK_MODE = "car_queue_artwork_mode"
         private const val CAR_LYRICS_ARTWORK_MODE = "car_lyrics_artwork_mode"
 
         private const val MAX_RETRY_COUNT_AFTER_ERROR = 3

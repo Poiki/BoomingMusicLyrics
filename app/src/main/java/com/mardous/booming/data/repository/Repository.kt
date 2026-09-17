@@ -56,6 +56,7 @@ const val MAX_ITEMS_PER_CHUNK = 900
 interface Repository {
 
     suspend fun allSongs(): List<Song>
+    suspend fun songCount(): Int
     suspend fun allAlbums(): List<Album>
     suspend fun allArtists(): List<Artist>
     suspend fun allAlbumArtists(): List<Artist>
@@ -171,6 +172,7 @@ class RealRepository(
 ) : Repository {
 
     override suspend fun allSongs(): List<Song> = songRepository.songs()
+    override suspend fun songCount(): Int = songRepository.songCount()
 
     override suspend fun allAlbums(): List<Album> = albumRepository.albums()
 

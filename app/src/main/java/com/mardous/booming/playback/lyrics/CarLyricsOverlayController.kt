@@ -7,7 +7,6 @@ import android.util.Log
 import androidx.media3.common.Player
 import com.mardous.booming.BuildConfig
 import com.mardous.booming.R
-import com.mardous.booming.playback.queue.CarQueueArtworkController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +38,6 @@ internal class CarLyricsOverlayController(
     )
     private val artworkRenderer = CarLyricsArtworkRenderer(context)
     private val artworkCache = CarLyricsArtworkCache<CarLyricsTextOverride, CarLyricsArtwork>()
-    private val queueArtwork = CarQueueArtworkController(context, player, metadataPlayer, scope)
 
     @Volatile
     private var modes = CarArtworkMode.COVER
@@ -60,13 +58,9 @@ internal class CarLyricsOverlayController(
     val isArtworkEnabled: Boolean
         get() = modes.artworkEnabled
 
-    val isQueueEnabled: Boolean
-        get() = modes.queueEnabled
-
-    fun setModes(artworkEnabled: Boolean, queueEnabled: Boolean) {
+    fun setModes(artworkEnabled: Boolean) {
         changeModes {
             when {
-                queueEnabled -> CarArtworkMode.QUEUE
                 artworkEnabled -> CarArtworkMode.LYRICS
                 else -> CarArtworkMode.COVER
             }
@@ -76,12 +70,6 @@ internal class CarLyricsOverlayController(
     fun toggleArtwork(): Boolean = changeModes {
         it.toggle(CarArtworkMode.LYRICS)
     }.artworkEnabled
-
-    fun toggleQueue(): Boolean = changeModes {
-        it.toggle(CarArtworkMode.QUEUE)
-    }.queueEnabled
-
-    fun refreshArtwork() = runOnPlayerThread { queueArtwork.refresh() }
 
     fun release() {
         synchronized(this) {
@@ -95,7 +83,6 @@ internal class CarLyricsOverlayController(
         runOnPlayerThreadAndWait {
             handler.removeCallbacks(scheduledUpdate)
             player.removeListener(this)
-            queueArtwork.release()
             metadataPlayer.setModes(CarArtworkMode.COVER)
             clearPublishedOverlay(clearArtworkStore = true)
         }
@@ -140,7 +127,6 @@ internal class CarLyricsOverlayController(
             handler.removeCallbacks(scheduledUpdate)
             clearPublishedOverlay()
             metadataPlayer.setModes(updated)
-            queueArtwork.setEnabled(updated.queueEnabled)
             if (updated.artworkEnabled) {
                 ensureStateCollection()
                 renderAndSchedule()

@@ -15,8 +15,8 @@ class CarLyricsOverlayStateTest {
     }
 
     @Test
-    fun `late artwork cannot replace the current queue presentation`() {
-        state.modes = CarArtworkMode.QUEUE
+    fun `late artwork cannot replace the current lyrics presentation`() {
+        state.modes = CarArtworkMode.LYRICS
         state.publish("second", "second card")
         state.publish("first", "late first card")
         assertEquals("loading card", state.resolve("second").artwork)
@@ -24,28 +24,29 @@ class CarLyricsOverlayStateTest {
 
     @Test
     fun `first artwork render uses a placeholder without flashing the album`() {
-        state.modes = CarArtworkMode.QUEUE
+        state.modes = CarArtworkMode.LYRICS
         state.publish("first", null)
         assertEquals("loading card", state.resolve("first").artwork)
     }
 
     @Test
-    fun `switching between queue and lyrics discards the previous mode card`() {
+    fun `reopening lyrics discards the previous mode card`() {
         state.modes = CarArtworkMode.LYRICS
         state.publish("first", "lyrics card")
-        state.modes = CarArtworkMode.QUEUE
+        state.modes = CarArtworkMode.COVER
+        state.modes = CarArtworkMode.LYRICS
         assertEquals("loading card", state.resolve("first").artwork)
-        state.publish("first", "queue card")
-        assertEquals("queue card", state.resolve("first").artwork)
+        state.publish("first", "updated lyrics")
+        assertEquals("updated lyrics", state.resolve("first").artwork)
     }
 
     @Test
     fun `disabling the mode restores the source artwork`() {
-        state.modes = CarArtworkMode.QUEUE
-        state.publish("first", "queue card")
+        state.modes = CarArtworkMode.LYRICS
+        state.publish("first", "lyrics card")
         state.modes = CarArtworkMode.COVER
         assertNull(state.resolve("first").artwork)
-        state.modes = CarArtworkMode.QUEUE
+        state.modes = CarArtworkMode.LYRICS
         assertEquals("loading card", state.resolve("first").artwork)
     }
 

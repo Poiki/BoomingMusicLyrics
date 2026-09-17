@@ -53,6 +53,7 @@ interface SongRepository {
     fun song(songId: Long): Song
     fun song(cursor: Cursor?): Song
     fun songs(): List<Song>
+    fun songCount(): Int
     fun songs(songIds: List<Long>): List<Song>
     fun songs(query: String): List<Song>
     fun songs(cursor: Cursor?): List<Song>
@@ -83,6 +84,10 @@ class RealSongRepository(
         val songs = songs(makeSongCursor(null, null))
         return with(SongSortMode.AllSongs) { songs.sorted() }
     }
+
+    override fun songCount(): Int = makeSongCursor(
+        MediaQueryDispatcher().withColumns(AudioColumns._ID).setSelection(BASE_SELECTION)
+    )?.use { it.count } ?: 0
 
     override fun songs(songIds: List<Long>): List<Song> {
         val selection = "${AudioColumns._ID} IN (${songIds.joinToString(",") { "?" }})"

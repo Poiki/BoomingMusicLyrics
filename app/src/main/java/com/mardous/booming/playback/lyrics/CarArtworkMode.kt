@@ -1,12 +1,10 @@
 package com.mardous.booming.playback.lyrics
 
 internal enum class CarArtworkMode {
-    COVER, LYRICS, QUEUE;
+    COVER, LYRICS;
 
     val artworkEnabled: Boolean
         get() = this == LYRICS
-    val queueEnabled: Boolean
-        get() = this == QUEUE
     val isEnabled: Boolean
         get() = this != COVER
 

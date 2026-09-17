@@ -14,26 +14,33 @@ import androidx.media3.session.MediaConstants
 import com.mardous.booming.R
 import com.mardous.booming.coil.PlaybackArtworkStore
 import com.mardous.booming.playback.queue.CarQueueReferences
+import com.mardous.booming.playback.queue.CarQueueSnapshots
 import com.mardous.booming.playback.queue.carQueuePage
 
 /** Main-thread browser snapshots, sharing the player's metadata and cached artwork. */
 @OptIn(UnstableApi::class)
 internal class CarQueueBrowser(private val context: Context, private val player: Player) {
     private data class Cursor(val startId: String, val stopId: String)
+    private data class Row(val source: MediaMetadata, val artworkUri: Uri?, val item: MediaItem)
 
     private val token = System.nanoTime().toString(36) + ":"
     private val references = CarQueueReferences<Any>(ITEM_PREFIX + token)
     private val pages = LinkedHashMap<String, Cursor>(16, 0.75f, true)
-    private val snapshots = HashMap<String, List<MediaItem>>()
+    private val snapshots = CarQueueSnapshots<MediaItem>()
+    private val rows = LinkedHashMap<String, Row>(64, 0.75f, true)
+    private val currentId = CURRENT_PREFIX + token
     private val window = Timeline.Window()
     private var pageRevision = 0L
 
-    val root = folder(MediaIDs.CAR_UP_NEXT, R.string.up_next, R.drawable.ic_queue_music_24dp)
+    val root = folder(MediaIDs.CAR_UP_NEXT, R.string.action_next, R.drawable.ic_queue_music_24dp)
     val library = folder(MediaIDs.CAR_LIBRARY, R.string.library_title, R.drawable.ic_library_music_24dp)
 
     fun isQueueParent(id: String) = id == MediaIDs.CAR_UP_NEXT || id.startsWith(PAGE_PREFIX)
 
-    fun invalidate() = snapshots.clear()
+    fun invalidate() = snapshots.invalidate()
+
+    fun changedChildren(parentId: String): List<MediaItem>? =
+        snapshots.changed(parentId) { buildPage(parentId) }
 
     fun item(id: String): MediaItem? = when {
         id == MediaIDs.CAR_UP_NEXT -> root
@@ -45,7 +52,7 @@ internal class CarQueueBrowser(private val context: Context, private val player:
 
     fun children(parentId: String): List<MediaItem> {
         if (parentId != MediaIDs.CAR_UP_NEXT && !pages.containsKey(parentId)) return emptyList()
-        return snapshots.getOrPut(parentId) { buildPage(parentId) }
+        return snapshots.get(parentId) { buildPage(parentId) }
     }
 
     private fun buildPage(parentId: String): List<MediaItem> {
@@ -88,8 +95,11 @@ internal class CarQueueBrowser(private val context: Context, private val player:
         return true
     }
 
-    private fun resolve(id: String): Int? = references.resolve(id, player.mediaItemCount) {
-        player.currentTimeline.getWindow(it, window).uid
+    private fun resolve(id: String): Int? {
+        if (id == currentId) return player.currentMediaItemIndex.takeIf { it in 0 until player.mediaItemCount }
+        return references.resolve(id, player.mediaItemCount) {
+            player.currentTimeline.getWindow(it, window).uid
+        }
     }
 
     private fun reference(index: Int): String = references.register(
@@ -99,27 +109,39 @@ internal class CarQueueBrowser(private val context: Context, private val player:
     private fun row(index: Int): MediaItem {
         val item = player.getMediaItemAt(index)
         val metadata = item.mediaMetadata
-        return MediaItem.Builder()
-            .setMediaId(reference(index))
+        val isCurrent = index == player.currentMediaItemIndex
+        val id = if (isCurrent) currentId else reference(index)
+        val artworkUri = PlaybackArtworkStore.uriFor(metadata.artworkUri)
+        rows[id]?.takeIf { it.source == metadata && it.artworkUri == artworkUri }?.let { return it.item }
+        val row = MediaItem.Builder()
+            .setMediaId(id)
             .setMediaMetadata(
                 metadata.buildUpon()
                     .setIsBrowsable(false)
                     .setIsPlayable(true)
+                    .setDisplayTitle(if (isCurrent) metadata.title ?: metadata.displayTitle else metadata.displayTitle)
+                    .setSubtitle(if (isCurrent) {
+                        listOfNotNull(context.getString(R.string.now_playing),
+                            metadata.artist?.takeIf { it.isNotBlank() }).joinToString(" · ")
+                    } else metadata.subtitle)
                     .setArtworkData(null, null)
-                    .setArtworkUri(PlaybackArtworkStore.uriFor(metadata.artworkUri))
+                    .setArtworkUri(artworkUri)
                     .setExtras(Bundle(metadata.extras ?: Bundle.EMPTY).apply {
                         putInt(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_SINGLE_ITEM,
                             MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_LIST_ITEM)
-                        putString(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE,
-                            context.getString(if (index == player.currentMediaItemIndex) {
-                                R.string.now_playing
-                            } else {
-                                R.string.up_next
-                            }))
+                        if (isCurrent) {
+                            remove(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE)
+                        } else {
+                            putString(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE,
+                                context.getString(R.string.up_next))
+                        }
                     })
                     .build()
             )
             .build()
+        rows[id] = Row(metadata, artworkUri, row)
+        if (rows.size > 360) rows.remove(rows.keys.first())
+        return row
     }
 
     private fun moreFolder(id: String) = folder(id, R.string.car_queue_more, R.drawable.ic_next_24dp)
@@ -147,8 +169,9 @@ internal class CarQueueBrowser(private val context: Context, private val player:
         private const val PAGE_SIZE = 40
         private const val MAX_PAGES = 8
         private const val ITEM_PREFIX = "CAR_QUEUE_ITEM:"
+        private const val CURRENT_PREFIX = "CAR_QUEUE_CURRENT:"
         private const val PAGE_PREFIX = "CAR_QUEUE_PAGE:"
 
-        fun isQueueItem(id: String) = id.startsWith(ITEM_PREFIX)
+        fun isQueueItem(id: String) = id.startsWith(ITEM_PREFIX) || id.startsWith(CURRENT_PREFIX)
     }
 }
