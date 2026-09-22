@@ -39,6 +39,8 @@ import com.mardous.booming.data.model.Album
 import com.mardous.booming.data.model.Artist
 import com.mardous.booming.data.model.Song
 import com.mardous.booming.data.model.UnindexedSong
+import com.mardous.booming.data.text.encodingVariants
+import com.mardous.booming.data.text.repairMojibake
 import com.mardous.booming.extensions.files.getCanonicalPathSafe
 import com.mardous.booming.extensions.hasQ
 import com.mardous.booming.extensions.hasR
@@ -96,10 +98,11 @@ class RealSongRepository(
     }
 
     override fun songs(query: String): List<Song> {
+        val (selection, arguments) = generateSearchPattern(query)
         return songs(
             makeSongCursor(
-                selection = "${AudioColumns.TITLE} LIKE ? OR ${AudioColumns.ARTIST} LIKE ? OR ${AudioColumns.ALBUM} LIKE ?",
-                selectionValues = arrayOf("%$query%", "%$query%", "%$query%")
+                selection = selection,
+                selectionValues = arguments
             )
         )
     }
@@ -402,7 +405,10 @@ class RealSongRepository(
                         ?.toLongOrDefault(0) ?: 0L
 
                     val id = (nonIndexedFiles.size + 1).toLong()
-                    song = UnindexedSong(uri, id, uriPath, title, fileSize, duration, album, artist)
+                    song = UnindexedSong(
+                        uri, id, uriPath, title.repairMojibake(), fileSize, duration,
+                        album.repairMojibake(), artist.repairMojibake()
+                    )
                         .also { nonIndexedFiles[uriPath] = it }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to retrieve file metadata (uri: $uri)", e)
@@ -433,7 +439,7 @@ class RealSongRepository(
         return Song(
             id = id,
             data = data,
-            title = title,
+            title = title.repairMojibake(),
             trackNumber = trackNumber,
             year = year,
             size = size,
@@ -441,10 +447,10 @@ class RealSongRepository(
             dateAdded = dateAdded,
             rawDateModified = dateModified,
             albumId = albumId,
-            albumName = albumName,
+            albumName = albumName.repairMojibake(),
             artistId = artistId,
-            artistName = artistName,
-            albumArtistName = albumArtistName,
+            artistName = artistName.repairMojibake(),
+            albumArtistName = albumArtistName?.repairMojibake(),
             genreName = genreName,
             volumeName = volumeName,
             resolvedFromFile = resolvedFromFile
@@ -493,7 +499,17 @@ class RealSongRepository(
             return baseProjection
         }
 
-        fun generateSearchPattern(term: String, selection: String = SEARCH_SELECTION) =
-            selection to Array(selection.count { it == '?' }) { "%$term%" }
+        fun generateSearchPattern(
+            term: String,
+            selection: String = SEARCH_SELECTION,
+            exact: Boolean = false
+        ): Pair<String, Array<String>> {
+            val variants = term.encodingVariants()
+            val placeholders = selection.count { it == '?' }
+            val predicate = variants.joinToString(" OR ", prefix = "(", postfix = ")") { "($selection)" }
+            return predicate to variants.flatMap { value ->
+                List(placeholders) { if (exact) value else "%$value%" }
+            }.toTypedArray()
+        }
     }
 }

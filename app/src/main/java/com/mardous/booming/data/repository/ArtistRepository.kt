@@ -90,8 +90,11 @@ class RealArtistRepository(
     }
 
     override fun artists(query: String): List<Artist> {
+        val (selection, arguments) = RealSongRepository.generateSearchPattern(
+            query, "${AudioColumns.ARTIST} LIKE ?"
+        )
         val songs = songRepository.songs(
-            songRepository.makeSongCursor(AudioColumns.ARTIST + " LIKE ?", arrayOf("%$query%"), DEFAULT_SORT_ORDER)
+            songRepository.makeSongCursor(selection, arguments, DEFAULT_SORT_ORDER)
         )
         val artists = splitIntoArtists(albumRepository.splitIntoAlbums(songs))
         return sortArtists(artists)
@@ -122,10 +125,13 @@ class RealArtistRepository(
             return Artist(Artist.VARIOUS_ARTISTS_ID, albums, filterSingles, isAlbumArtist = true)
         }
 
+        val (selection, arguments) = RealSongRepository.generateSearchPattern(
+            artistName, "${AudioColumns.ALBUM_ARTIST} = ? COLLATE NOCASE", exact = true
+        )
         val songs = songRepository.songs(
             songRepository.makeSongCursor(
-                "lower(${AudioColumns.ALBUM_ARTIST})=?",
-                arrayOf(artistName.lowercase()),
+                selection,
+                arguments,
                 DEFAULT_SORT_ORDER
             )
         )
@@ -140,10 +146,13 @@ class RealArtistRepository(
     }
 
     override fun albumArtists(query: String): List<Artist> {
+        val (selection, arguments) = RealSongRepository.generateSearchPattern(
+            query, "${AudioColumns.ALBUM_ARTIST} LIKE ?"
+        )
         val songs = songRepository.songs(
             songRepository.makeSongCursor(
-                "${AudioColumns.ALBUM_ARTIST} LIKE ?",
-                arrayOf("%$query%"),
+                selection,
+                arguments,
                 DEFAULT_SORT_ORDER
             )
         )

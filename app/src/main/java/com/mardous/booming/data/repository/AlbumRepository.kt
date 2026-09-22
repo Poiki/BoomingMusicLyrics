@@ -48,10 +48,13 @@ class RealAlbumRepository(private val songRepository: RealSongRepository) : Albu
     }
 
     override fun albums(query: String): List<Album> {
+        val (selection, arguments) = RealSongRepository.generateSearchPattern(
+            query, "${AudioColumns.ALBUM} LIKE ? OR ${AudioColumns.ALBUM_ARTIST} LIKE ?"
+        )
         val songs = songRepository.songs(
             songRepository.makeSongCursor(
-                selection = "${AudioColumns.ALBUM} LIKE ? OR ${AudioColumns.ALBUM_ARTIST} LIKE ?",
-                selectionValues = arrayOf("%$query%", "%$query"),
+                selection = selection,
+                selectionValues = arguments,
                 sortOrder = DEFAULT_SORT_ORDER
             )
         )
@@ -74,9 +77,12 @@ class RealAlbumRepository(private val songRepository: RealSongRepository) : Albu
 
     override fun similarAlbums(album: Album): List<Album> {
         val songCursor = if (!album.albumArtistName.isNullOrEmpty()) {
+            val (selection, arguments) = RealSongRepository.generateSearchPattern(
+                album.albumArtistName, "${AudioColumns.ALBUM_ARTIST} = ?", exact = true
+            )
             songRepository.makeSongCursor(
-                "${AudioColumns.ALBUM_ARTIST} = ? AND ${AudioColumns.ALBUM_ID} != ?",
-                arrayOf(album.albumArtistName, album.id.toString()),
+                "$selection AND ${AudioColumns.ALBUM_ID} != ?",
+                arguments + album.id.toString(),
                 DEFAULT_SORT_ORDER
             )
         } else {

@@ -47,10 +47,13 @@ The changes below are relative to the upstream base, [commit `da051803`](https:/
 | Audio output | High-precision PCM output is the default when no sound processing is configured, while explicit output preferences and existing sound processing settings are respected. The saved output choice is loaded before constructing the sink. Neutral balance avoids per-sample calculations, and optional hardware offload requires gapless support plus speed/pitch support only when needed. |
 | Stable song metadata | Lyrics stay inside the artwork and never replace the song title, display title, subtitle, or artist sent through the media session. These fields remain intact when switching artwork modes. |
 | Shared lyrics state | The phone and car use a shared coordinator with cancellation on track changes, bounded caching, and separate loading, missing, instrumental, and error states. Late results from a previous song cannot replace the current presentation. |
+| Text encoding | Common UTF-8/Latin-1/Windows-1252 mix-ups are repaired when reading lyrics, song titles, artists, and albums, including saved playlists and history. Correct Unicode text is preserved, and metadata searches include legacy encoded names. Lyrics files recognize Unicode byte order marks and prefer valid UTF-8 before automatic charset detection. |
 | Lyrics reliability | Provider failures are distinguished from missing lyrics, instrumental results are preserved, empty LRCLIB responses are handled, file encoding detection is bounded, and the preferred lyrics file format setting uses the correct values. |
 | Playback work | Unnecessary queue scans are skipped when sequential queue handling is disabled. Car button layouts are published only when they change. |
 
 These changes focus on responsiveness and avoiding unnecessary background work. The car host controls artwork size, layout, and button placement; behavior has been checked in an Android Automotive emulator and still needs validation on individual vehicles.
+
+Text repair runs when content is loaded and is shared by the phone and car. For example, `jabÃ³n` becomes `jabón`; complete encoded sequences can also recover punctuation and emoji without re-encoding unaffected text. The app does not rename music files or rewrite their tags automatically. File charset detection remains bounded to 64 KiB, and the explicit **Treat all lyrics files as UTF-8** preference is retained. Text already replaced with missing-character symbols cannot be reconstructed reliably.
 
 ## Car controls
 
@@ -150,7 +153,7 @@ To run the regression tests:
 ./gradlew :app:testGithubDebugUnitTest
 ```
 
-The current changes include 56 unit tests covering lyrics resolution, stale result rejection, artwork caching, lyrics mode switching, bounded queue pages, stable queue-entry references, car tab limits, duplicate browser-update suppression, audio output preferences, and neutral balance sample preservation. Android Automotive emulator checks also cover metadata preservation, track changes, shuffle, repeat, live browser updates, song totals, and selecting browser rows without replacing the queue or shuffle order.
+The current changes include 77 unit tests covering text encoding repair, Unicode preservation, lyrics file decoding and word timing, saved metadata and search compatibility, lyrics resolution, stale result rejection, artwork caching, lyrics mode switching, bounded queue pages, stable queue-entry references, car tab limits, duplicate browser-update suppression, audio output preferences, and neutral balance sample preservation. Android Automotive emulator checks also cover metadata preservation, track changes, shuffle, repeat, live browser updates, song totals, and selecting browser rows without replacing the queue or shuffle order.
 
 ### Official upstream downloads
 

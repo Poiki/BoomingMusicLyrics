@@ -11,6 +11,7 @@ import com.kyant.taglib.Metadata
 import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
 import com.mardous.booming.data.model.ChannelMode
+import com.mardous.booming.data.text.repairMojibake
 import org.jaudiotagger.tag.reference.GenreTypes
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -23,7 +24,11 @@ class MetadataReader(uri: Uri, readPictures: Boolean = false) : KoinComponent {
     private var audioProperties: AudioProperties? = null
 
     private val pictures get() = metadata?.pictures
-    private val tags get() = metadata?.propertyMap
+    private val tags by lazy {
+        metadata?.propertyMap?.mapValues { (_, values) ->
+            values.map { it.repairMojibake() }.toTypedArray()
+        }
+    }
 
     val hasMetadata get() = metadata != null
     val hasPictures get() = pictures?.isNotEmpty() == true

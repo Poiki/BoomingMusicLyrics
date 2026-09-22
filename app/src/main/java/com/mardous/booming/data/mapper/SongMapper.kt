@@ -22,6 +22,7 @@ import com.mardous.booming.data.local.room.PlayCountEntity
 import com.mardous.booming.data.local.room.PlaylistEntity
 import com.mardous.booming.data.local.room.SongEntity
 import com.mardous.booming.data.model.Song
+import com.mardous.booming.data.text.repairMojibake
 
 fun List<SongEntity>.toSongs(): List<Song> {
     return map { it.toSong() }
@@ -85,7 +86,7 @@ fun SongEntity.toSong(): Song {
     return Song(
         id = id,
         data = data,
-        title = title,
+        title = title.repairMojibake(),
         trackNumber = trackNumber,
         year = year,
         size = size,
@@ -93,10 +94,10 @@ fun SongEntity.toSong(): Song {
         dateAdded = dateAdded,
         rawDateModified = dateModified,
         albumId = albumId,
-        albumName = albumName,
+        albumName = albumName.repairMojibake(),
         artistId = artistId,
-        artistName = artistName,
-        albumArtistName = albumArtist,
+        artistName = artistName.repairMojibake(),
+        albumArtistName = albumArtist?.repairMojibake(),
         genreName = genreName
     )
 }
@@ -127,7 +128,7 @@ fun PlayCountEntity.toSong(): Song {
     return Song(
         id = id,
         data = data,
-        title = title,
+        title = title.repairMojibake(),
         trackNumber = trackNumber,
         year = year,
         size = size,
@@ -135,10 +136,10 @@ fun PlayCountEntity.toSong(): Song {
         dateAdded = dateAdded,
         rawDateModified = dateModified,
         albumId = albumId,
-        albumName = albumName,
+        albumName = albumName.repairMojibake(),
         artistId = artistId,
-        artistName = artistName,
-        albumArtistName = albumArtistName,
+        artistName = artistName.repairMojibake(),
+        albumArtistName = albumArtistName?.repairMojibake(),
         genreName = genreName
     )
 }
@@ -147,7 +148,7 @@ fun HistoryEntity.toSong(): Song {
     return Song(
         id = id,
         data = data,
-        title = title,
+        title = title.repairMojibake(),
         trackNumber = trackNumber,
         year = year,
         size = size,
@@ -155,10 +156,10 @@ fun HistoryEntity.toSong(): Song {
         dateAdded = dateAdded,
         rawDateModified = dateModified,
         albumId = albumId,
-        albumName = albumName,
+        albumName = albumName.repairMojibake(),
         artistId = artistId,
-        artistName = artistName,
-        albumArtistName = albumArtistName,
+        artistName = artistName.repairMojibake(),
+        albumArtistName = albumArtistName?.repairMojibake(),
         genreName = genreName
     )
 }

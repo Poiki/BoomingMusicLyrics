@@ -24,6 +24,7 @@ import com.mardous.booming.data.model.network.NetworkFeature
 import com.mardous.booming.data.remote.lyrics.api.betterlyrics.BetterLyricsApi
 import com.mardous.booming.data.remote.lyrics.api.lrclib.LrcLibApi
 import com.mardous.booming.data.remote.lyrics.api.lyrically.LyricallyApi
+import com.mardous.booming.data.text.repairMojibake
 import com.mardous.booming.extensions.media.albumArtistName
 import com.mardous.booming.extensions.media.extractMainArtistName
 import io.ktor.client.HttpClient
@@ -95,7 +96,10 @@ class LyricsDownloadService(client: HttpClient) {
             throw IOException("Lyrics download failed", e)
         }
 
-        return result
+        return result.copy(
+            plain = result.plain?.let { RawLyrics.Remote.Content(it.source, it.lyrics?.repairMojibake()) },
+            synced = result.synced?.let { RawLyrics.Remote.Content(it.source, it.lyrics?.repairMojibake()) }
+        )
     }
 
     /**
