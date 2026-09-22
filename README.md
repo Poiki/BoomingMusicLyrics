@@ -48,12 +48,15 @@ The changes below are relative to the upstream base, [commit `da051803`](https:/
 | Stable song metadata | Lyrics stay inside the artwork and never replace the song title, display title, subtitle, or artist sent through the media session. These fields remain intact when switching artwork modes. |
 | Shared lyrics state | The phone and car use a shared coordinator with cancellation on track changes, bounded caching, and separate loading, missing, instrumental, and error states. Late results from a previous song cannot replace the current presentation. |
 | Text encoding | Common UTF-8/Latin-1/Windows-1252 mix-ups are repaired when reading lyrics, song titles, artists, and albums, including saved playlists and history. Correct Unicode text is preserved, and metadata searches include legacy encoded names. Lyrics files recognize Unicode byte order marks and prefer valid UTF-8 before automatic charset detection. |
+| Artist credits | Collaborations appear under each credited participant instead of creating a separate artist for every combination. Names are grouped across differences in case, spacing, and Unicode composition. Stable artist IDs and a shared catalog cache serve phone and car browsing, artist details, artwork, and search. Shared songs are deduplicated when selecting several artists. |
 | Lyrics reliability | Provider failures are distinguished from missing lyrics, instrumental results are preserved, empty LRCLIB responses are handled, file encoding detection is bounded, and the preferred lyrics file format setting uses the correct values. |
 | Playback work | Unnecessary queue scans are skipped when sequential queue handling is disabled. Car button layouts are published only when they change. |
 
 These changes focus on responsiveness and avoiding unnecessary background work. The car host controls artwork size, layout, and button placement; behavior has been checked in an Android Automotive emulator and still needs validation on individual vehicles.
 
 Text repair runs when content is loaded and is shared by the phone and car. For example, `jabÃ³n` becomes `jabón`; complete encoded sequences can also recover punctuation and emoji without re-encoding unaffected text. The app does not rename music files or rewrite their tags automatically. File charset detection remains bounded to 64 KiB, and the explicit **Treat all lyrics files as UTF-8** preference is retained. Text already replaced with missing-character symbols cannot be reconstructed reliably.
+
+The Artists view includes every participant by default. For example, tracks credited to `SFDK con Natos y Waor` appear under both **SFDK** and **Natos y Waor**, with the duo's name kept intact. Credits recognize `feat.`, `ft.`, `featuring`, `with`, `con`, `vs`, `x`, semicolons, and multi-value separators. Commas, slashes, ampersands, and plus signs are split only when a participant is independently present in the library, to avoid guessing at ambiguous band names. Original song credits remain visible during playback. **Show album artists** remains an optional alternative, and an explicitly saved choice is preserved.
 
 ## Car controls
 
@@ -153,7 +156,7 @@ To run the regression tests:
 ./gradlew :app:testGithubDebugUnitTest
 ```
 
-The current changes include 77 unit tests covering text encoding repair, Unicode preservation, lyrics file decoding and word timing, saved metadata and search compatibility, lyrics resolution, stale result rejection, artwork caching, lyrics mode switching, bounded queue pages, stable queue-entry references, car tab limits, duplicate browser-update suppression, audio output preferences, and neutral balance sample preservation. Android Automotive emulator checks also cover metadata preservation, track changes, shuffle, repeat, live browser updates, song totals, and selecting browser rows without replacing the queue or shuffle order.
+The current changes include 90 unit tests covering collaborative artist grouping, stable identity, catalog reuse and invalidation, text encoding repair, Unicode preservation, lyrics file decoding and word timing, saved metadata and search compatibility, lyrics resolution, stale result rejection, artwork caching, lyrics mode switching, bounded queue pages, stable queue-entry references, car tab limits, duplicate browser-update suppression, audio output preferences, and neutral balance sample preservation. Phone and Android Automotive emulator checks cover artist details and collaboration search. Automotive checks also cover metadata preservation, track changes, shuffle, repeat, live browser updates, song totals, and selecting browser rows without replacing the queue or shuffle order.
 
 ### Official upstream downloads
 

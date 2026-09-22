@@ -27,7 +27,8 @@ data class Album(
     val albumArtistName: String?,
     val year: Int,
     val firstSongIndex: Int,
-    override val songs: List<Song>
+    override val songs: List<Song>,
+    val totalSongCount: Int = songs.size
 ) : SongProvider {
 
     val name: String
@@ -44,7 +45,7 @@ data class Album(
     val dateAdded: Long by lazy { songs.minOf { it.dateAdded } }
 
     val isSingle: Boolean
-        get() = songCount == 1
+        get() = totalSongCount == 1
 
     val albumCover: Uri
         get() = id.asAlbumCoverUri()
@@ -57,11 +58,11 @@ data class Album(
         if (this === other) return true
         if (other == null || javaClass != other.javaClass) return false
         val album = other as Album
-        return id == album.id && songs == album.songs
+        return id == album.id && songs == album.songs && totalSongCount == album.totalSongCount
     }
 
     override fun hashCode(): Int {
-        return Objects.hash(id, songs)
+        return Objects.hash(id, songs, totalSongCount)
     }
 
     override fun toString(): String {

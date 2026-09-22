@@ -28,14 +28,15 @@ data class Artist(
     val id: Long,
     val albums: List<Album>,
     val filterSingles: Boolean,
-    val isAlbumArtist: Boolean = false
+    val isAlbumArtist: Boolean = false,
+    val creditedName: String? = null
 ) : SongProvider {
 
     constructor(artistName: String, albums: List<Album>, filterSingles: Boolean, isAlbumArtist: Boolean = true) :
-            this(albums.firstOrNull()?.artistId ?: -1, albums, filterSingles, true)
+            this(albums.firstOrNull()?.artistId ?: -1, albums, filterSingles, isAlbumArtist, artistName)
 
     val name: String
-        get() = if (isAlbumArtist) getAlbumArtistName() ?: "-" else getArtistName()
+        get() = creditedName ?: if (isAlbumArtist) getAlbumArtistName() ?: "-" else getArtistName()
 
     val albumCount: Int
         get() = if (filterSingles) albums.count { !it.isSingle } else albums.size
@@ -52,8 +53,7 @@ data class Artist(
     val sortedSongs: List<Song>
         get() = with(SongSortMode.ArtistSongs) { songs.sorted() }
 
-    override val songs: List<Song>
-        get() = albums.flatMap { it.songs }
+    override val songs: List<Song> = albums.flatMap { it.songs }.distinctBy { it.id to it.data }
 
     fun safeGetFirstAlbum(): Album {
         return albums.firstOrNull() ?: Album.empty
@@ -72,13 +72,14 @@ data class Artist(
         if (other == null || javaClass != other.javaClass) return false
         val artist = other as Artist
         return id == artist.id &&
-                songs == artist.songs &&
+                albums == artist.albums &&
                 isAlbumArtist == artist.isAlbumArtist &&
-                filterSingles == artist.filterSingles
+                filterSingles == artist.filterSingles &&
+                creditedName == artist.creditedName
     }
 
     override fun hashCode(): Int {
-        return Objects.hash(id, songs, isAlbumArtist, filterSingles)
+        return Objects.hash(id, albums, isAlbumArtist, filterSingles, creditedName)
     }
 
     override fun toString(): String {

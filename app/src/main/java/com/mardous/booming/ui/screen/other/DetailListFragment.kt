@@ -229,7 +229,7 @@ class DetailListFragment : AbsMainActivityFragment(R.layout.fragment_detail_list
         }
         libraryViewModel.artists(type).observe(viewLifecycleOwner) { artists ->
             artistAdapter.dataSet = artists
-            songs(artists.flatMap { it.songs })
+            songs(artists.flatMap { it.songs }.distinctBy { it.id to it.data })
             // Subtitle won't set automatically for albums and artists
             binding.subtitle.text = plurals(R.plurals.x_artists, artists.size)
         }

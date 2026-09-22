@@ -145,6 +145,9 @@ class LibraryViewModel(
     }
 
     fun forceReload(reloadType: ReloadType) = viewModelScope.launch(IO) {
+        if (reloadType == ReloadType.Artists || reloadType == ReloadType.Folders) {
+            repository.invalidateArtistCache()
+        }
         when (reloadType) {
             ReloadType.Songs -> fetchSongs()
             ReloadType.Albums -> fetchAlbums()
@@ -288,6 +291,7 @@ class LibraryViewModel(
     fun songs(providers: List<Any>): LiveData<List<Song>> = liveData(IO) {
         val songs = providers.filterIsInstance<SongProvider>()
             .flatMap { it.songs }
+            .distinctBy { it.id to it.data }
         emit(songs)
     }
 

@@ -243,7 +243,7 @@ fun Artist.onArtistMenu(fragment: Fragment, menuItem: MenuItem): Boolean {
 
 fun List<Artist>.onArtistsMenu(fragment: Fragment, menuItem: MenuItem): Boolean {
     fragment.lifecycleScope.launch(Dispatchers.IO) {
-        val songs = flatMap { it.songs }
+        val songs = flatMap { it.songs }.distinctBy { it.id to it.data }
         withContext(Dispatchers.Main) {
             songs.onSongsMenu(fragment, menuItem)
         }

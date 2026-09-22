@@ -355,7 +355,7 @@ object Preferences : KoinComponent {
     }
 
     var onlyAlbumArtists: Boolean
-        get() = preferences.getBoolean(ONLY_ALBUM_ARTISTS, true)
+        get() = preferences.getBoolean(ONLY_ALBUM_ARTISTS, false)
         set(value) = preferences.edit { putBoolean(ONLY_ALBUM_ARTISTS, value) }
 
     val trashMusicFiles: Boolean

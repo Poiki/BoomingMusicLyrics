@@ -24,12 +24,16 @@ import androidx.annotation.RequiresApi
 import com.mardous.booming.core.sort.AlbumSortMode
 import com.mardous.booming.core.sort.ArtistSortMode
 import com.mardous.booming.data.local.MediaQueryDispatcher
+import com.mardous.booming.data.local.artists.ArtistCatalog
+import com.mardous.booming.data.local.artists.ArtistCatalogCache
+import com.mardous.booming.data.local.artists.artistKey
 import com.mardous.booming.data.model.Album
 import com.mardous.booming.data.model.Artist
 import com.mardous.booming.extensions.utilities.collapseSpaces
 import com.mardous.booming.util.Preferences
 
 interface ArtistRepository {
+    fun invalidateCache() = Unit
     fun artists(): List<Artist>
     fun artists(query: String): List<Artist>
     fun artist(artistId: Long): Artist
@@ -44,15 +48,34 @@ class RealArtistRepository(
     private val albumRepository: RealAlbumRepository
 ) : ArtistRepository {
 
+    private data class CatalogSnapshot(val catalog: ArtistCatalog, val artists: Map<Long, Artist>)
+
+    private val catalogCache = ArtistCatalogCache<CatalogSnapshot>()
+
+    override fun invalidateCache() = catalogCache.invalidate()
+
+    private fun catalog(): CatalogSnapshot = catalogCache.get(
+        listOf(
+            Preferences.minimumSongDuration, Preferences.whitelistEnabled, Preferences.blacklistEnabled,
+            filterSingles, AlbumSortMode.ArtistAlbums.selectedKey, AlbumSortMode.ArtistAlbums.selectedDescending
+        )
+    ) {
+        val songs = songRepository.songs(songRepository.makeSongCursor(null, null, DEFAULT_SORT_ORDER))
+        val catalog = ArtistCatalog(songs)
+        val artists = catalog.entries.associate { entry ->
+            val albums = albumRepository.splitIntoAlbums(entry.songs, sortMode = AlbumSortMode.ArtistAlbums)
+                .map { it.copy(totalSongCount = catalog.albumSongCounts.getValue(it.id)) }
+            entry.id to Artist(entry.id, albums, filterSingles, creditedName = entry.name)
+        }
+        CatalogSnapshot(catalog, artists)
+    }
+
     private val filterSingles: Boolean
         get() = Preferences.ignoreSingles
 
     override fun artists(): List<Artist> {
-        val songs = songRepository.songs(
-            songRepository.makeSongCursor(null, null, DEFAULT_SORT_ORDER)
-        )
         val minimumSongCount = Preferences.minimumSongCountForArtist
-        val artists = splitIntoArtists(albumRepository.splitIntoAlbums(songs)).filter {
+        val artists = catalog().artists.values.filter {
             it.songCount >= minimumSongCount
         }
         return sortArtists(artists)
@@ -72,31 +95,13 @@ class RealArtistRepository(
             return Artist(Artist.VARIOUS_ARTISTS_ID, albums, filterSingles)
         }
 
-        val songs = songRepository.songs(
-            songRepository.makeSongCursor(
-                AudioColumns.ARTIST_ID + "=?",
-                arrayOf(artistId.toString()),
-                DEFAULT_SORT_ORDER
-            )
-        )
-        return Artist(
-            id = artistId,
-            albums = albumRepository.splitIntoAlbums(
-                songs = songs,
-                sortMode = AlbumSortMode.ArtistAlbums
-            ),
-            filterSingles = filterSingles
-        )
+        val snapshot = catalog()
+        return snapshot.catalog.find(artistId)?.let { snapshot.artists[it.id] } ?: Artist.empty
     }
 
     override fun artists(query: String): List<Artist> {
-        val (selection, arguments) = RealSongRepository.generateSearchPattern(
-            query, "${AudioColumns.ARTIST} LIKE ?"
-        )
-        val songs = songRepository.songs(
-            songRepository.makeSongCursor(selection, arguments, DEFAULT_SORT_ORDER)
-        )
-        val artists = splitIntoArtists(albumRepository.splitIntoAlbums(songs))
+        val key = query.artistKey()
+        val artists = catalog().artists.values.filter { it.name.artistKey().contains(key) }
         return sortArtists(artists)
     }
 
@@ -182,18 +187,6 @@ class RealArtistRepository(
             songRepository.songs(it)
         }
         return splitIntoAlbumArtists(albumRepository.splitIntoAlbums(songs, sorted = false)).take(MAX_SIMILAR_ARTISTS)
-    }
-
-    private fun splitIntoArtists(albums: List<Album>): List<Artist> {
-        val filterSingles = this.filterSingles
-        return albums.groupBy { it.artistId }
-            .map {
-                Artist(
-                    id = it.key,
-                    albums = with(AlbumSortMode.ArtistAlbums) { it.value.sorted() },
-                    filterSingles = filterSingles
-                )
-            }
     }
 
     fun splitIntoAlbumArtists(albums: List<Album>): List<Artist> {

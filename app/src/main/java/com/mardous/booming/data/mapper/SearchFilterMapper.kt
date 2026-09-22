@@ -5,6 +5,7 @@ import android.provider.MediaStore
 import com.mardous.booming.R
 import com.mardous.booming.data.SearchFilter
 import com.mardous.booming.data.local.room.PlaylistEntity
+import com.mardous.booming.data.local.search.ArtistSearchFilter
 import com.mardous.booming.data.local.search.BasicSearchFilter
 import com.mardous.booming.data.local.search.LastAddedSearchFilter
 import com.mardous.booming.data.local.search.SmartSearchFilter
@@ -24,41 +25,11 @@ fun Album.searchFilter(context: Context) =
         )
     )
 
-fun Artist.searchFilter(context: Context): SmartSearchFilter {
-    return if (isAlbumArtist) {
-        SmartSearchFilter(
-            context.getString(R.string.search_artist_x_label, displayName()), null,
-            FilterSelection(
-                SearchQuery.FilterMode.Songs,
-                MediaStore.Audio.AudioColumns.TITLE,
-                "${MediaStore.Audio.AudioColumns.ALBUM_ARTIST}=?",
-                name
-            ),
-            FilterSelection(
-                SearchQuery.FilterMode.Albums,
-                MediaStore.Audio.AudioColumns.ALBUM,
-                "${MediaStore.Audio.AudioColumns.ALBUM_ARTIST}=?",
-                name
-            )
-        )
-    } else {
-        SmartSearchFilter(
-            context.getString(R.string.search_artist_x_label, displayName()), null,
-            FilterSelection(
-                SearchQuery.FilterMode.Songs,
-                MediaStore.Audio.AudioColumns.TITLE,
-                "${MediaStore.Audio.AudioColumns.ARTIST_ID}=?",
-                id.toString()
-            ),
-            FilterSelection(
-                SearchQuery.FilterMode.Albums,
-                MediaStore.Audio.AudioColumns.ALBUM,
-                "${MediaStore.Audio.AudioColumns.ARTIST_ID}=?",
-                id.toString()
-            )
-        )
-    }
-}
+fun Artist.searchFilter(context: Context): SearchFilter = ArtistSearchFilter(
+    context.getString(R.string.search_artist_x_label, displayName()),
+    id,
+    name.takeIf { isAlbumArtist }
+)
 
 fun Folder.searchFilter(context: Context): SearchFilter =
     BasicSearchFilter(

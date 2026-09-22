@@ -162,11 +162,12 @@ class PlaybackService :
     private val libraryProvider = LibraryProvider(repository)
     private val songPlayCountHelper = SongPlayCountHelper()
     private val mediaStoreObserver = MediaStoreObserver(uiHandler) {
+        repository.invalidateArtistCache()
         invalidatePlaybackArtwork()
         WidgetDataSource.invalidate()
         dispatchPlayQueue(player)
         mediaSession?.let { session ->
-            listOf(MediaIDs.ROOT, MediaIDs.CAR_LIBRARY, MediaIDs.SONGS).forEach { parent ->
+            listOf(MediaIDs.ROOT, MediaIDs.CAR_LIBRARY, MediaIDs.SONGS, MediaIDs.ARTISTS, MediaIDs.ALBUM_ARTISTS).forEach { parent ->
                 session.notifyChildrenChanged(parent, Int.MAX_VALUE, null)
             }
         }

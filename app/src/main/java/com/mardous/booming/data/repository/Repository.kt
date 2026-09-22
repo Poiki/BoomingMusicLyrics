@@ -60,6 +60,7 @@ interface Repository {
     suspend fun allAlbums(): List<Album>
     suspend fun allArtists(): List<Artist>
     suspend fun allAlbumArtists(): List<Artist>
+    fun invalidateArtistCache() = Unit
     suspend fun allGenres(): List<Genre>
     suspend fun allYears(): List<ReleaseYear>
     suspend fun allFolders(): FileSystemQuery
@@ -179,6 +180,8 @@ class RealRepository(
     override suspend fun allArtists(): List<Artist> = artistRepository.artists()
 
     override suspend fun allAlbumArtists(): List<Artist> = artistRepository.albumArtists()
+
+    override fun invalidateArtistCache() = artistRepository.invalidateCache()
 
     override suspend fun allGenres(): List<Genre> = genreRepository.genres()
 

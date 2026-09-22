@@ -80,7 +80,7 @@ class ArtistImageFetcher(
             }
         }
 
-        check(image.id > 0 || image.id == Artist.VARIOUS_ARTISTS_ID) { "invalid artist ID (${image.id})" }
+        check(image.id != 0L && image.id != Artist.empty.id) { "invalid artist ID (${image.id})" }
         val stream = checkNotNull(contentResolver.openInputStream(image.coverUri)) {
             "couldn't open stream from ${image.coverUri}"
         }
