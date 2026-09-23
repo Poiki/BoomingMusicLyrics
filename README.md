@@ -62,7 +62,7 @@ The Artists view includes every participant by default. For example, tracks cred
 
 Open **Next** in the car's media library to browse the playback queue. The short tab label avoids truncation on narrow car screens. The current song appears first with **Now playing** beside the artist; upcoming songs appear under the full-width **Up Next** heading. Tap an upcoming song to play it. The list follows the active shuffle and repeat settings, including showing only the current song under repeat-one. Selecting the current song resumes it without restarting it. Duplicate songs are treated as separate queue entries.
 
-When the host limits the number of tabs, **Library** keeps all the original categories accessible. On hosts allowing only one tab, **Next** is inside **Library**. Layout, tab widths, and transition animations are rendered by Android Auto or Android Automotive.
+The car prioritizes **Songs** and **Artists**, independently of the phone's tab order. **Albums** is omitted from the car's navigation. With four available tabs, the order is **Next**, **Songs**, **Artists**, and **Library**; **Library** provides access to the remaining enabled categories. On hosts allowing only one tab, **Next** is inside **Library**. Layout, tab widths, and transition animations are rendered by Android Auto or Android Automotive.
 
 The lyrics artwork mode is enabled in the **`github` build flavor** for Android Auto and Android Automotive controllers. The `fdroid` and `playstore` flavors do not enable this extra control.
 

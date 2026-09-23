@@ -641,8 +641,11 @@ class PlaybackService :
         val rootLimit = carRootLimits[browser] ?: 4
         return serviceScope.future(IO) {
             val result = runCatching {
-                val children = libraryProvider.getChildren(this@PlaybackService,
-                    if (parentId == MediaIDs.CAR_LIBRARY) MediaIDs.ROOT else parentId)
+                val children = libraryProvider.getChildren(
+                    this@PlaybackService,
+                    if (parentId == MediaIDs.CAR_LIBRARY) MediaIDs.ROOT else parentId,
+                    forCar = isCar
+                )
                 when {
                     parentId == MediaIDs.ROOT && isCar -> carRootChildren(
                         children, carQueueBrowser.root, carQueueBrowser.library, rootLimit)

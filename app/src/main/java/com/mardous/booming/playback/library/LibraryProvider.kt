@@ -201,7 +201,8 @@ class LibraryProvider(private val repository: Repository) {
     @OptIn(UnstableApi::class)
     suspend fun getChildren(
         context: Context,
-        parentId: String
+        parentId: String,
+        forCar: Boolean = false
     ): List<MediaItem> {
         return if (MediaIDs.isPath(parentId)) {
             val parts = MediaIDs.splitPath(parentId)
@@ -212,7 +213,7 @@ class LibraryProvider(private val repository: Repository) {
             }
         } else when (parentId) {
             MediaIDs.ROOT -> {
-                getRootChildren(context)
+                getRootChildren(context, forCar)
             }
 
             MediaIDs.SONGS -> {
@@ -312,10 +313,19 @@ class LibraryProvider(private val repository: Repository) {
     }
 
     @OptIn(UnstableApi::class)
-    private suspend fun getRootChildren(context: Context): List<MediaItem> {
+    private suspend fun getRootChildren(context: Context, forCar: Boolean): List<MediaItem> {
         val resources = context.resources
         val mediaItems = arrayListOf<MediaItem>()
-        Preferences.libraryCategories.forEach { categoryInfo ->
+        val categories = if (forCar) {
+            val primaryCategories = listOf(CategoryInfo.Category.Songs, CategoryInfo.Category.Artists)
+            primaryCategories.map { CategoryInfo(it, visible = true) } +
+                Preferences.libraryCategories.filter {
+                    it.category != CategoryInfo.Category.Albums && it.category !in primaryCategories
+                }
+        } else {
+            Preferences.libraryCategories
+        }
+        categories.forEach { categoryInfo ->
             if (categoryInfo.visible) {
                 val mediaItem = when (categoryInfo.category) {
                     CategoryInfo.Category.Songs -> {
